@@ -32,47 +32,41 @@ define(function (require, exports, module) {
     var EditorManager       = brackets.getModule("editor/EditorManager"),
         QuickOpen           = brackets.getModule("search/QuickOpen"),
         CSSUtils            = brackets.getModule("language/CSSUtils"),
-        DocumentManager     = brackets.getModule("document/DocumentManager");
+        DocumentManager     = brackets.getModule("document/DocumentManager"),
+        StringMatch         = brackets.getModule("utils/StringMatch");
 
 
     /**
-     * Contains a list of information about selectors for a single document. This array is populated
+     * Returns a list of information about selectors for a single document. This array is populated
      * by createSelectorList()
-     * @type {?Array.<FileLocation>}
+     * @return {?Array.<FileLocation>}
      */
-    var selectorList = null;
-
-    /** clears selectorList */
-    function done() {
-        selectorList = null;
-    }
-
-    // create function list and caches it in FileIndexMangager
     function createSelectorList() {
         var doc = DocumentManager.getCurrentDocument();
         if (!doc) {
             return;
         }
 
-        if (!selectorList) {
-            selectorList = [];
-            var docText = doc.getText();
-            selectorList = CSSUtils.extractAllSelectors(docText);
-        }
+        var docText = doc.getText();
+        return CSSUtils.extractAllSelectors(docText, doc.getLanguage().getMode());
     }
 
 
     /**
      * @param {string} query what the user is searching for
-     * @returns {Array.<SearchResult>} sorted and filtered results that match the query
+     * @return {Array.<SearchResult>} sorted and filtered results that match the query
      */
-    function search(query) {
-        createSelectorList();
+    function search(query, matcher) {
+        var selectorList = matcher.selectorList;
+        if (!selectorList) {
+            selectorList = createSelectorList();
+            matcher.selectorList = selectorList;
+        }
         query = query.slice(query.indexOf("@") + 1, query.length);
         
         // Filter and rank how good each match is
         var filteredList = $.map(selectorList, function (itemInfo) {
-            var searchResult = QuickOpen.stringMatch(itemInfo.selector, query);
+            var searchResult = matcher.match(CSSUtils.getCompleteSelectors(itemInfo), query);
             if (searchResult) {
                 searchResult.selectorInfo = itemInfo;
             }
@@ -80,7 +74,7 @@ define(function (require, exports, module) {
         });
         
         // Sort based on ranking & basic alphabetical order
-        QuickOpen.basicMatchSort(filteredList);
+        StringMatch.basicMatchSort(filteredList);
 
         return filteredList;
     }
@@ -90,31 +84,29 @@ define(function (require, exports, module) {
      * @param {boolean} returns true if this plugin wants to provide results for this query
      */
     function match(query) {
-        // TODO: match any location of @ when QuickOpen._handleItemFocus() is modified to
-        // dynamic open files
-        //if (query.indexOf("@") !== -1) {
-        if (query.indexOf("@") === 0) {
-            return true;
-        }
+        return (query[0] === "@");
     }
 
     /**
-     * Select the selected item in the current document
+     * Scroll to the selected item in the current document (unless no query string entered yet,
+     * in which case the topmost list item is irrelevant)
      * @param {?SearchResult} selectedItem
+     * @param {string} query
+     * @param {boolean} explicit False if this is only highlighted due to being at top of list after search()
      */
-    function itemFocus(selectedItem) {
-        if (!selectedItem) {
+    function itemFocus(selectedItem, query, explicit) {
+        if (!selectedItem || (query.length < 2 && !explicit)) {
             return;
         }
         var selectorInfo = selectedItem.selectorInfo;
 
         var from = {line: selectorInfo.selectorStartLine, ch: selectorInfo.selectorStartChar};
         var to = {line: selectorInfo.selectorStartLine, ch: selectorInfo.selectorEndChar};
-        EditorManager.getCurrentFullEditor().setSelection(from, to);
+        EditorManager.getCurrentFullEditor().setSelection(from, to, true);
     }
 
-    function itemSelect(selectedItem) {
-        itemFocus(selectedItem);
+    function itemSelect(selectedItem, query) {
+        itemFocus(selectedItem, query, true);
     }
 
 
@@ -122,13 +114,11 @@ define(function (require, exports, module) {
     QuickOpen.addQuickOpenPlugin(
         {
             name: "CSS Selectors",
-            fileTypes: ["css"],
-            done: done,
+            languageIds: ["css", "less", "scss"],
             search: search,
             match: match,
             itemFocus: itemFocus,
-            itemSelect: itemSelect,
-            resultsFormatter: null // use default
+            itemSelect: itemSelect
         }
     );
 

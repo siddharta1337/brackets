@@ -34,7 +34,8 @@
 define(function (require, exports, module) {
     "use strict";
     
-    var packageJSON = require("text!package.json");
+    var configJSON  = require("text!config.json"),
+        UrlParams   = require("utils/UrlParams").UrlParams;
     
     // Define core brackets namespace if it isn't already defined
     //
@@ -42,17 +43,18 @@ define(function (require, exports, module) {
     // we're in "use strict" mode. Most likely, 'window' will always point to the global
     // object when this code is running. However, in case it isn't (e.g. if we're running 
     // inside Node for CI testing) we use this trick to get the global object.
-    //
-    // Taken from:
-    //   http://stackoverflow.com/questions/3277182/how-to-get-the-global-object-in-javascript
     var Fn = Function, global = (new Fn("return this"))();
     if (!global.brackets) {
         global.brackets = {};
     }
     
+    // Parse URL params
+    var params = new UrlParams();
+    params.parse();
+    
     // Parse src/config.json
     try {
-        global.brackets.metadata = JSON.parse(packageJSON);
+        global.brackets.metadata = JSON.parse(configJSON);
         global.brackets.config = global.brackets.metadata.config;
     } catch (err) {
         console.log(err);
@@ -67,8 +69,7 @@ define(function (require, exports, module) {
     // TODO: (issue #266) load conditionally
     global.brackets.shellAPI = require("utils/ShellAPI");
     
-    global.brackets.inBrowser = !global.brackets.hasOwnProperty("fs");
-    
+    // Determine OS/platform
     if (global.navigator.platform === "MacIntel" || global.navigator.platform === "MacPPC") {
         global.brackets.platform = "mac";
     } else if (global.navigator.platform.indexOf("Linux") >= 0) {
@@ -77,9 +78,24 @@ define(function (require, exports, module) {
         global.brackets.platform = "win";
     }
     
+    global.brackets.inBrowser = !global.brackets.hasOwnProperty("fs");
+    
+    // Are we in a desktop shell with a native menu bar?
+    var hasNativeMenus = params.get("hasNativeMenus");
+    if (hasNativeMenus) {
+        global.brackets.nativeMenus = (hasNativeMenus === "true");
+    } else {
+        global.brackets.nativeMenus = (!global.brackets.inBrowser && (global.brackets.platform !== "linux"));
+    }
+    
+    // Locale-related APIs
+    global.brackets.isLocaleDefault = function () {
+        return !global.localStorage.getItem("locale");
+    };
+    
     global.brackets.getLocale = function () {
         // By default use the locale that was determined in brackets.js
-        return global.localStorage.getItem("locale") || global.require.s.contexts._.config.locale;
+        return params.get("testEnvironment") ? "en" : (global.localStorage.getItem("locale") || global.require.s.contexts._.config.locale);
     };
 
     global.brackets.setLocale = function (locale) {

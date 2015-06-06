@@ -31,7 +31,8 @@ define(function (require, exports, module) {
 
     var EditorManager       = brackets.getModule("editor/EditorManager"),
         QuickOpen           = brackets.getModule("search/QuickOpen"),
-        DocumentManager     = brackets.getModule("document/DocumentManager");
+        DocumentManager     = brackets.getModule("document/DocumentManager"),
+        StringMatch         = brackets.getModule("utils/StringMatch");
 
 
    /** 
@@ -52,59 +53,54 @@ define(function (require, exports, module) {
     }
 
     /**
-     * Contains a list of information about ID's for a single document. This array is populated
+     * Returns a list of information about ID's for a single document. This array is populated
      * by createIDList()
      * @type {?Array.<FileLocation>}
      */
-    var idList = null;
-
-    /** clears idList */
-    function done() {
-        idList = null;
-    }
-
-    // create list of ids found in html file
     function createIDList() {
         var doc = DocumentManager.getCurrentDocument();
         if (!doc) {
             return;
         }
+        
+        var idList = [];
+        var docText = doc.getText();
+        var lines = docText.split("\n");
 
-        if (!idList) {
-            idList = [];
-            var docText = doc.getText();
-            var lines = docText.split("\n");
-
-            var regex = new RegExp(/\s+id\s*?=\s*?["'](.*?)["']/gi);
-            var id, chFrom, chTo, i, line;
-            for (i = 0; i < lines.length; i++) {
-                line = lines[i];
-                var info;
-                while ((info = regex.exec(line)) !== null) {
-                    id = info[1];
-                    // TODO: this doesn't handle id's that share the 
-                    // same portion of a name on the same line or when
-                    // the id and value are on different lines
-                    chFrom = line.indexOf(id);
-                    chTo = chFrom + id.length;
-                    idList.push(new FileLocation(null, i, chFrom, chTo, id));
-                }
+        var regex = new RegExp(/\s+id\s*?=\s*?["'](.*?)["']/gi);
+        var id, chFrom, chTo, i, line;
+        for (i = 0; i < lines.length; i++) {
+            line = lines[i];
+            var info;
+            while ((info = regex.exec(line)) !== null) {
+                id = info[1];
+                // TODO: this doesn't handle id's that share the 
+                // same portion of a name on the same line or when
+                // the id and value are on different lines
+                chFrom = line.indexOf(id);
+                chTo = chFrom + id.length;
+                idList.push(new FileLocation(null, i, chFrom, chTo, id));
             }
         }
+        return idList;
     }
 
 
     /**
      * @param {string} query what the user is searching for
-     * @returns {Array.<SearchResult>} sorted and filtered results that match the query
+     * @return {Array.<SearchResult>} sorted and filtered results that match the query
      */
-    function search(query) {
-        createIDList();
+    function search(query, matcher) {
+        var idList = matcher.idList;
+        if (!idList) {
+            idList = createIDList();
+            matcher.idList = idList;
+        }
         query = query.slice(query.indexOf("@") + 1, query.length);
         
         // Filter and rank how good each match is
         var filteredList = $.map(idList, function (fileLocation) {
-            var searchResult = QuickOpen.stringMatch(fileLocation.id, query);
+            var searchResult = matcher.match(fileLocation.id, query);
             if (searchResult) {
                 searchResult.fileLocation = fileLocation;
             }
@@ -112,7 +108,7 @@ define(function (require, exports, module) {
         });
         
         // Sort based on ranking & basic alphabetical order
-        QuickOpen.basicMatchSort(filteredList);
+        StringMatch.basicMatchSort(filteredList);
 
         return filteredList;
     }
@@ -122,45 +118,41 @@ define(function (require, exports, module) {
      * @param {boolean} returns true if this plug-in wants to provide results for this query
      */
     function match(query) {
-        // TODO: match any location of @ when QuickOpen._handleItemFocus() is modified to
-        // dynamic open files
-        //if (query.indexOf("@") !== -1) {
-        if (query.indexOf("@") === 0) {
-            return true;
-        }
+        return (query[0] === "@");
     }
 
 
     /**
-     * Select the selected item in the current document
+     * Scroll to the selected item in the current document (unless no query string entered yet,
+     * in which case the topmost list item is irrelevant)
      * @param {?SearchResult} selectedItem
+     * @param {string} query
+     * @param {boolean} explicit False if this is only highlighted due to being at top of list after search()
      */
-    function itemFocus(selectedItem) {
-        if (!selectedItem) {
+    function itemFocus(selectedItem, query, explicit) {
+        if (!selectedItem || (query.length < 2 && !explicit)) {
             return;
         }
         var fileLocation = selectedItem.fileLocation;
         
         var from = {line: fileLocation.line, ch: fileLocation.chFrom};
         var to = {line: fileLocation.line, ch: fileLocation.chTo};
-        EditorManager.getCurrentFullEditor().setSelection(from, to);
+        EditorManager.getCurrentFullEditor().setSelection(from, to, true);
     }
 
-    function itemSelect(selectedItem) {
-        itemFocus(selectedItem);
+    function itemSelect(selectedItem, query) {
+        itemFocus(selectedItem, query, true);
     }
 
 
     QuickOpen.addQuickOpenPlugin(
         {
             name: "html ids",
-            fileTypes: ["html"],
-            done: done,
+            languageIds: ["html"],
             search: search,
             match: match,
             itemFocus: itemFocus,
-            itemSelect: itemSelect,
-            resultsFormatter: null // use default
+            itemSelect: itemSelect
         }
     );
 

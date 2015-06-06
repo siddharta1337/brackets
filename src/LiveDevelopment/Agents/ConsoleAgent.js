@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $ */
+/*global define */
 
 /**
  * ConsoleAgent forwards all console message from the remote console to the
@@ -45,6 +45,9 @@ define(function ConsoleAgent(require, exports, module) {
             level = "warn";
         }
         var text = "ConsoleAgent: " + message.text;
+        if (message.url) {
+            text += " (url: " + message.url + ")";
+        }
         if (message.stackTrace) {
             var callFrame = message.stackTrace[0];
             text += " in " + callFrame.functionName + ":" + callFrame.columnNumber;
@@ -71,11 +74,18 @@ define(function ConsoleAgent(require, exports, module) {
     function _onMessagesCleared(event, res) {
         // res = {}
     }
+    
+    /**
+     * Enable the inspector Console domain
+     * @return {jQuery.Promise} A promise resolved when the Console.enable() command is successful.
+     */
+    function enable() {
+        return Inspector.Console.enable();
+    }
 
     /** Initialize the agent */
     function load() {
-        Inspector.Console.enable();
-        $(Inspector.Console)
+        Inspector.Console
             .on("messageAdded.ConsoleAgent", _onMessageAdded)
             .on("messageRepeatCountUpdated.ConsoleAgent", _onMessageRepeatCountUpdated)
             .on("messagesCleared.ConsoleAgent", _onMessagesCleared);
@@ -83,10 +93,11 @@ define(function ConsoleAgent(require, exports, module) {
 
     /** Clean up */
     function unload() {
-        $(Inspector.Console).off(".ConsoleAgent");
+        Inspector.Console.off(".ConsoleAgent");
     }
 
     // Export public functions
+    exports.enable = enable;
     exports.load = load;
     exports.unload = unload;
 });

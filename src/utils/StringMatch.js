@@ -22,11 +22,13 @@
  */
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50 */
-/*global define, $, window, setTimeout */
+/*global define */
 /*unittests: StringMatch */
 
 define(function (require, exports, module) {
     "use strict";
+    
+    var _ = require("thirdparty/lodash");
     
     /*
      * Performs matching that is useful for QuickOpen and similar searches.
@@ -82,8 +84,12 @@ define(function (require, exports, module) {
             } else if (c === "." || c === "-" || c === "_") {
                 // _, . and - are separators so they are
                 // special and so is the next character
-                specials.push(i++);
                 specials.push(i);
+                if (str[i + 1] !== "/") {
+                    // if the next key is a slash, handle it separately
+                    // see #10871
+                    specials.push(++i);
+                }
                 lastWasLowerCase = false;
             } else if (c.toUpperCase() === c) {
                 // this is the check for camelCase changeovers
@@ -113,24 +119,32 @@ define(function (require, exports, module) {
         DEBUG_SCORES = ds;
     }
     
+
     // Constants for scoring
-    var SPECIAL_POINTS = 35;
+    var SPECIAL_POINTS = 40;
     var MATCH_POINTS = 10;
+    var UPPER_CASE_MATCH = 100;
+    var CONSECUTIVE_MATCHES_POINTS = 8;
+    var BEGINNING_OF_NAME_POINTS = 13;
     var LAST_SEGMENT_BOOST = 1;
-    var BEGINNING_OF_NAME_POINTS = 25;
     var DEDUCTION_FOR_LENGTH = 0.2;
-    var CONSECUTIVE_MATCHES_POINTS = 10;
     var NOT_STARTING_ON_SPECIAL_PENALTY = 25;
     
     // Used in match lists to designate matches of "special" characters (see
     // findSpecialCharacters above
-    function SpecialMatch(index) {
+    function SpecialMatch(index, upper) {
         this.index = index;
+        if (upper) {
+            this.upper = upper;
+        }
     }
     
     // Used in match lists to designate any matched characters that are not special
-    function NormalMatch(index) {
+    function NormalMatch(index, upper) {
         this.index = index;
+        if (upper) {
+            this.upper = upper;
+        }
     }
     
     /*
@@ -189,8 +203,8 @@ define(function (require, exports, module) {
      *   forward searching to resume
      *
      * * When `deadBranches[queryCounter] = strCounter` it means if we're still trying to match 
-     *   `queryStr[queryCounter]` and we get to `str[strCounter]`, there's no way we can match the 
-     *   remainer of `queryStr` with the remainder of `str` -- either using specials-only or 
+     *   `queryLower[queryCounter]` and we get to `str[strCounter]`, there's no way we can match the 
+     *   remainer of `queryLower` with the remainder of `str` -- either using specials-only or 
      *   full any-char matching.
      *
      * * We know this because deadBranches[] is set in backtrack(), and we don't get to backtrack() unless 
@@ -203,18 +217,20 @@ define(function (require, exports, module) {
      *
      * @param {string} query the search string (generally lower cased)
      * @param {string} str the string to compare with (generally lower cased)
+     * @param {string} originalQuery the "non-normalized" query string (used to detect case match priority)
+     * @param {string} originalStr the "non-normalized" string to compare with (used to detect case match priority)
      * @param {Array} specials list of special indexes in str (from findSpecialCharacters)
      * @param {int} startingSpecial index into specials array to start scanning with
      * @return {Array.<SpecialMatch|NormalMatch>} matched indexes or null if no matches possible
      */
-    function _generateMatchList(query, str, specials, startingSpecial) {
+    function _generateMatchList(query, str, originalQuery, originalStr, specials, startingSpecial) {
         var result = [];
         
         // used to keep track of which special character we're testing now
         var specialsCounter = startingSpecial;
         
         // strCounter and queryCounter are the indexes used for pulling characters
-        // off of the str/compareStr and query.
+        // off of the str/compareLower and query.
         var strCounter = specials[startingSpecial];
         var queryCounter;
         
@@ -255,10 +271,17 @@ define(function (require, exports, module) {
                     specialsCounter = i;
                 } else if (query[queryCounter] === str[specials[i]]) {
                     // we have a match! do the required tracking
+                    strCounter = specials[i];
+                    
+                    // Upper case match check:
+                    // If the query and original string matched, but the original string
+                    // and the lower case version did not, that means that the original
+                    // was upper case.
+                    var upper = originalQuery[queryCounter] === originalStr[strCounter] && originalStr[strCounter] !== str[strCounter];
+                    result.push(new SpecialMatch(strCounter, upper));
                     specialsCounter = i;
                     queryCounter++;
-                    strCounter = specials[i];
-                    result.push(new SpecialMatch(strCounter++));
+                    strCounter++;
                     return true;
                 }
             }
@@ -336,8 +359,13 @@ define(function (require, exports, module) {
                     // we look character by character for matches
                     if (query[queryCounter] === str[strCounter]) {
                         // got a match! record it, and switch back to searching specials
+                        
+                        // See the specials section above for a comment on the expression
+                        // for `upper` below.
+                        var upper = originalQuery[queryCounter] === originalStr[strCounter] && originalStr[strCounter] !== str[strCounter];
+                        result.push(new NormalMatch(strCounter++, upper));
+
                         queryCounter++;
-                        result.push(new NormalMatch(strCounter++));
                         state = SPECIALS_MATCH;
                     } else {
                         // no match, keep looking
@@ -360,6 +388,7 @@ define(function (require, exports, module) {
         return result;
     }
     
+    
     /*
      * Seek out the best match in the last segment (generally the filename). 
      * Matches in the filename are preferred, but the query entered could match
@@ -374,27 +403,33 @@ define(function (require, exports, module) {
      *
      * @param {string} query the search string (generally lower cased)
      * @param {string} str the string to compare with (generally lower cased)
+     * @param {string} originalQuery the "non-normalized" query string (used to detect case match priority)
+     * @param {string} originalStr the "non-normalized" string to compare with (used to detect case match priority)
      * @param {Array} specials list of special indexes in str (from findSpecialCharacters)
      * @param {int} startingSpecial index into specials array to start scanning with
      * @param {boolean} lastSegmentStart which character does the last segment start at
      * @return {{remainder:int, matchList:Array.<SpecialMatch|NormalMatch>}} matched indexes or null if no matches possible
      */
-    function _lastSegmentSearch(query, str, specials, startingSpecial, lastSegmentStart) {
+    function _lastSegmentSearch(query, str, originalQuery, originalStr, specials, startingSpecial, lastSegmentStart) {
         var queryCounter, matchList;
         
         // It's possible that the query is longer than the last segment.
         // If so, we can chop off the bit that we know couldn't possibly be there.
-        var remainder = "";
-        var extraCharacters = specials[startingSpecial] + query.length - str.length;
+        var remainder = "",
+            originalRemainder = "",
+            extraCharacters = specials[startingSpecial] + query.length - str.length;
 
         if (extraCharacters > 0) {
             remainder = query.substring(0, extraCharacters);
+            originalRemainder = originalQuery.substring(0, extraCharacters);
             query = query.substring(extraCharacters);
+            originalQuery = originalQuery.substring(extraCharacters);
         }
         
         for (queryCounter = 0; queryCounter < query.length; queryCounter++) {
             matchList = _generateMatchList(query.substring(queryCounter),
-                                     str, specials, startingSpecial);
+                                     str, originalQuery.substring(queryCounter),
+                                     originalStr, specials, startingSpecial);
             
             // if we've got a match *or* there are no segments in this string, we're done
             if (matchList || startingSpecial === 0) {
@@ -407,6 +442,7 @@ define(function (require, exports, module) {
         } else {
             return {
                 remainder: remainder + query.substring(0, queryCounter),
+                originalRemainder: originalRemainder + originalQuery.substring(0, queryCounter),
                 matchList: matchList
             };
         }
@@ -418,22 +454,20 @@ define(function (require, exports, module) {
      *
      * The parameters and return value are the same as for getMatchRanges.
      *
-     * @param {string} query the search string (will be searched lower case)
-     * @param {string} str the original string to search
+     * @param {string} queryLower the search string (will be searched lower case)
+     * @param {string} compareLower the lower-cased string to search
+     * @param {string} originalQuery the "non-normalized" query string (used to detect case match priority)
+     * @param {string} originalStr the "non-normalized" string to compare with (used to detect case match priority)
      * @param {Array} specials list of special indexes in str (from findSpecialCharacters)
      * @param {int} lastSegmentSpecialsIndex index into specials array to start scanning with
      * @return {Array.<SpecialMatch|NormalMatch>} matched indexes or null if no matches possible
      */
-    function _wholeStringSearch(query, str, specials, lastSegmentSpecialsIndex) {
-        // set up query as all lower case and make a lower case string to use for comparisons
-        query = query.toLowerCase();
-        var compareStr = str.toLowerCase();
-        
+    function _wholeStringSearch(queryLower, compareLower, originalQuery, originalStr, specials, lastSegmentSpecialsIndex) {
         var lastSegmentStart = specials[lastSegmentSpecialsIndex];
         var result;
         var matchList;
         
-        result = _lastSegmentSearch(query, compareStr, specials, lastSegmentSpecialsIndex, lastSegmentStart);
+        result = _lastSegmentSearch(queryLower, compareLower, originalQuery, originalStr, specials, lastSegmentSpecialsIndex, lastSegmentStart);
         
         if (result) {
             matchList = result.matchList;
@@ -442,7 +476,9 @@ define(function (require, exports, module) {
             if (result.remainder) {
                 // Scan with the remainder only through the beginning of the last segment
                 var remainderMatchList = _generateMatchList(result.remainder,
-                                              compareStr.substring(0, lastSegmentStart),
+                                              compareLower.substring(0, lastSegmentStart),
+                                              result.originalRemainder,
+                                              originalStr.substring(0, lastSegmentStart),
                                               specials.slice(0, lastSegmentSpecialsIndex), 0);
                 
                 if (remainderMatchList) {
@@ -456,7 +492,7 @@ define(function (require, exports, module) {
         } else {
             // No match in the last segment, so we start over searching the whole
             // string
-            matchList = _generateMatchList(query, compareStr, specials, 0, lastSegmentStart);
+            matchList = _generateMatchList(queryLower, compareLower, originalQuery, originalStr, specials, 0);
         }
         
         return matchList;
@@ -483,6 +519,7 @@ define(function (require, exports, module) {
             scoreDebug = {
                 special: 0,
                 match: 0,
+                upper: 0,
                 lastSegment: 0,
                 beginning: 0,
                 lengthDeduction: 0,
@@ -546,6 +583,13 @@ define(function (require, exports, module) {
             }
             newPoints += MATCH_POINTS;
             
+            if (match.upper) {
+                if (DEBUG_SCORES) {
+                    scoreDebug.upper += UPPER_CASE_MATCH;
+                }
+                newPoints += UPPER_CASE_MATCH;
+            }
+                        
             // A bonus is given for characters that match at the beginning
             // of the filename
             if (c === lastSegmentStart) {
@@ -560,16 +604,29 @@ define(function (require, exports, module) {
             // handles the initial value of lastMatchIndex which is used for
             // constructing ranges but we don't yet have a true match.
             if (score > 0 && lastMatchIndex + 1 === c) {
+                // Continue boosting for each additional match at the beginning
+                // of the name
+                if (c - numConsecutive === lastSegmentStart) {
+                    if (DEBUG_SCORES) {
+                        scoreDebug.beginning += BEGINNING_OF_NAME_POINTS;
+                    }
+                    newPoints += BEGINNING_OF_NAME_POINTS;
+                }
+                
+                numConsecutive++;
+                
+                var boost = CONSECUTIVE_MATCHES_POINTS * numConsecutive;
+                
                 // Consecutive matches that started on a special are a
                 // good indicator of intent, so we award an added bonus there.
                 if (currentRangeStartedOnSpecial) {
-                    numConsecutive++;
+                    boost = boost * 2;
                 }
                 
                 if (DEBUG_SCORES) {
-                    scoreDebug.consecutive += CONSECUTIVE_MATCHES_POINTS * numConsecutive;
+                    scoreDebug.consecutive += boost;
                 }
-                newPoints += CONSECUTIVE_MATCHES_POINTS * numConsecutive;
+                newPoints += boost;
             } else {
                 numConsecutive = 1;
             }
@@ -638,11 +695,55 @@ define(function (require, exports, module) {
         }
         return result;
     }
+    
+    /*
+     * If we short circuit normal matching to produce a prefix match,
+     * this function will generate the appropriate SearchResult.
+     * This function assumes that the prefix match check has already
+     * been performed.
+     *
+     * @param {string} str  The string with the prefix match for the query
+     * @param {string} query  The query that matched the beginning of str
+     * @return {{ranges:Array.<{text:string, matched:boolean, includesLastSegment:boolean}>, matchGoodness:int, scoreDebug: Object}} ranges has a matching range for beginning of str
+     *                      and a non-matching range for the end of the str
+     *                      the score is -Number.MAX_VALUE in all cases
+     */
+    function _prefixMatchResult(str, query) {
+        var result = new SearchResult(str);
         
+        result.matchGoodness = -Number.MAX_VALUE;
+        
+        if (str.substr(0, query.length) !== query) {
+            // Penalize for not matching case
+            result.matchGoodness *= 0.5;
+        }
+        
+        if (DEBUG_SCORES) {
+            result.scoreDebug = {
+                beginning: -result.matchGoodness
+            };
+        }
+        
+        result.stringRanges = [{
+            text: str.substr(0, query.length),
+            matched: true,
+            includesLastSegment: true
+        }];
+        if (str.length > query.length) {
+            result.stringRanges.push({
+                text: str.substring(query.length),
+                matched: false,
+                includesLastSegment: true
+            });
+        }
+        return result;
+    }
+
+
     /*
      * Match str against the query using the QuickOpen algorithm provided by
-     * the functions above. The general idea is to prefer matches in the last
-     * segment (the filename) and matches of "special" characters. stringMatch
+     * the functions above. The general idea is to prefer matches of "special" characters and,
+     * optionally, matches that occur in the "last segment" (generally, the filename). stringMatch
      * will try to provide the best match and produces a "matchGoodness" score
      * to allow for relative ranking.
      *
@@ -655,11 +756,20 @@ define(function (require, exports, module) {
      * 
      * @param {string} str  The string to search
      * @param {string} query  The query string to find in string
+     * @param {{preferPrefixMatches:?boolean, segmentedSearch:?boolean}} options to control search behavior.
+     *                  preferPrefixMatches puts an exact case-insensitive prefix match ahead of all other matches,
+     *                  even short-circuiting the match logic. This option implies segmentedSearch=false.
+     *                  When segmentedSearch is true, the string is broken into segments by "/" characters
+     *                  and the last segment is searched first and matches there are scored higher.
+     * @param {?Object} special (optional) the specials data from findSpecialCharacters, if already known
+     *                  This is generally just used by StringMatcher for optimization.
      * @return {{ranges:Array.<{text:string, matched:boolean, includesLastSegment:boolean}>, matchGoodness:int, scoreDebug: Object}} matched ranges and score
      */
-    function stringMatch(str, query) {
+    function stringMatch(str, query, options, special) {
         var result;
-
+        
+        options = options || {};
+        
         // No query? Short circuit the normal work done and just
         // return a single range that covers the whole string.
         if (!query) {
@@ -676,13 +786,40 @@ define(function (require, exports, module) {
             return result;
         }
         
+        // comparisons are case insensitive, so switch to lower case here
+        var queryLower = query.toLowerCase();
+        var compareLower = str.toLowerCase();
+        
+        if (options.preferPrefixMatches) {
+            options.segmentedSearch = false;
+        }
+        
+        if (options.preferPrefixMatches && compareLower.substr(0, queryLower.length) === queryLower) {
+            // NOTE: we compare against the case insensitive match
+            //        above but we pass the case-sensitive version in 
+            //        because we want to weight the match to give case-matches
+            //        a higher score
+            return _prefixMatchResult(str, query);
+        }
+        
         // Locate the special characters and then use orderedCompare to do the real
         // work.
-        var special = findSpecialCharacters(str);
-        var lastSegmentStart = special.specials[special.lastSegmentSpecialsIndex];
-        var matchList = _wholeStringSearch(query, str, special.specials,
-                              special.lastSegmentSpecialsIndex);
+        if (!special) {
+            special = findSpecialCharacters(str);
+        }
+        var lastSegmentStart, matchList;
         
+        // For strings that are not broken into multiple segments, we can potentially
+        // avoid some extra work
+        if (options.segmentedSearch) {
+            lastSegmentStart = special.specials[special.lastSegmentSpecialsIndex];
+            matchList = _wholeStringSearch(queryLower, compareLower, query, str, special.specials,
+                              special.lastSegmentSpecialsIndex);
+        } else {
+            lastSegmentStart = 0;
+            matchList = _generateMatchList(queryLower, compareLower, query, str, special.specials, 0);
+        }
+
         // If we get a match, turn this into a SearchResult as expected by the consumers
         // of this API.
         if (matchList) {
@@ -699,38 +836,54 @@ define(function (require, exports, module) {
     
     /**
      * Sorts an array of SearchResult objects on a primary field, followed by secondary fields
-     * in case of ties. 'fields' maps field name to priority, where 0 is the primary field. E.g.:
-     *      multiFieldSort(bugList, { milestone: 0, severity: 1 });
+     * in case of ties. 'fieldSpec' provides the priority order for fields, where the first entry is the primary field, for example:
+     *      multiFieldSort(bugList, [ "milestone", "severity" ]);
      * Would sort a bug list by milestone, and within each milestone sort bugs by severity.
+     *
+     * fieldSpec can also include comparator functions of the form normally used by the sort()
+     * function.
      *
      * Any fields that have a string value are compared case-insensitively. Fields used should be
      * present on all SearchResult objects (no optional/undefined fields).
      *
      * @param {!Array.<SearchResult>} searchResults
-     * @param {!Object.<string, number>} fields
+     * @param {!Array.<string, function>} fieldSpec
      */
-    function multiFieldSort(searchResults, fields) {
+    function multiFieldSort(searchResults, fieldSpec) {
         // Move field names into an array, with primary field first
-        var fieldNames = [];
-        $.each(fields, function (key, priority) {
-            fieldNames[priority] = key;
-        });
+        var comparisons;
+        if (Array.isArray(fieldSpec)) {
+            comparisons = fieldSpec;
+        } else {
+            // TODO Deprecate this form of calling this function
+            comparisons = [];
+            _.forEach(fieldSpec, function (priority, key) {
+                comparisons[priority] = key;
+            });
+        }
         
         searchResults.sort(function (a, b) {
             var priority;
-            for (priority = 0; priority < fieldNames.length; priority++) {
-                var fieldName = fieldNames[priority];
-                var valueA = a[fieldName];
-                var valueB = b[fieldName];
-                if (typeof valueA === "string") {
-                    valueA = valueA.toLowerCase();
-                    valueB = valueB.toLowerCase();
-                }
-                
-                if (valueA < valueB) {
-                    return -1;
-                } else if (valueA > valueB) {
-                    return 1;
+            for (priority = 0; priority < comparisons.length; priority++) {
+                var comparison = comparisons[priority];
+                if (typeof comparison === "function") {
+                    var result = comparison(a, b);
+                    if (result) {
+                        return result;
+                    }
+                } else {
+                    var valueA = a[comparison];
+                    var valueB = b[comparison];
+                    if (typeof valueA === "string") {
+                        valueA = valueA.toLowerCase();
+                        valueB = valueB.toLowerCase();
+                    }
+                    
+                    if (valueA < valueB) {
+                        return -1;
+                    } else if (valueA > valueB) {
+                        return 1;
+                    }
                 }
                 // otherwise, move on to next sort priority
             }
@@ -747,6 +900,87 @@ define(function (require, exports, module) {
         multiFieldSort(searchResults, { matchGoodness: 0, label: 1 });
     }
     
+    /**
+     * A StringMatcher provides an interface to the stringMatch function with built-in
+     * caching. You should use a StringMatcher for the lifetime of queries over a
+     * single data set.
+     *
+     * You are free to store other data on this object to assist in higher-level caching.
+     * (This object's caches are all stored in "_" prefixed properties.)
+     *
+     * @param {{preferPrefixMatches:?boolean, segmentedSearch:?boolean}} options to control search behavior.
+     *                  preferPrefixMatches puts an exact case-insensitive prefix match ahead of all other matches,
+     *                  even short-circuiting the match logic. This option implies segmentedSearch=false.
+     *                  segmentedSearch treats segments of the string specially.
+     */
+    function StringMatcher(options) {
+        this.options = options;
+        this.reset();
+    }
+    
+    /**
+     * Map from search-result string to the findSpecialCharacters() result for that string - easy to cache
+     * since this info doesn't change as the query changes.
+     * @type {Object.<string, {specials:Array.<number>, lastSegmentSpecialsIndex:number}>}
+     */
+    StringMatcher.prototype._specialsCache = null;
+    
+    /**
+     * Set of search-result strings that we know don't match the query _lastQuery - or any other query with
+     * that prefix.
+     * @type {Object.<string, boolean>}
+     */
+    StringMatcher.prototype._noMatchCache = null;
+    
+    /**
+     * Clears the caches. Use this in the event that the caches may be invalid.
+     */
+    StringMatcher.prototype.reset = function () {
+        // We keep track of the last query to know when we need to invalidate.
+        this._lastQuery = null;
+        
+        this._specialsCache = {};
+        this._noMatchCache = {};
+    };
+    
+    /**
+     * Performs a single match using the stringMatch function. See stringMatch for full documentation.
+     *
+     * @param {string} str  The string to search
+     * @param {string} query  The query string to find in string
+     * @return {{ranges:Array.<{text:string, matched:boolean, includesLastSegment:boolean}>, matchGoodness:int, scoreDebug: Object}} matched ranges and score
+     */
+    StringMatcher.prototype.match = function (str, query) {
+        
+        // If the query is not just added characters from the previous query, we invalidate
+        // the no match cache and will re-match everything.
+        if (this._lastQuery !== null && (this._lastQuery !== query.substring(0, this._lastQuery.length))) {
+            this._noMatchCache = {};
+        }
+        
+        this._lastQuery = query;
+        
+        // Check for a known non-matching string.
+        if (_.has(this._noMatchCache, str)) {
+            return undefined;
+        }
+        
+        // Load up the cached specials information (or build it if this is our first time through).
+        var special = _.has(this._specialsCache, str) ? this._specialsCache[str] : undefined;
+        if (special === undefined) {
+            special = findSpecialCharacters(str);
+            this._specialsCache[str] = special;
+        }
+        
+        var result = stringMatch(str, query, this.options, special);
+        
+        // If this query was not a match, we cache that fact for next time.
+        if (!result) {
+            this._noMatchCache[str] = true;
+        }
+        return result;
+    };
+    
     exports._findSpecialCharacters  = findSpecialCharacters;
     exports._wholeStringSearch      = _wholeStringSearch;
     exports._lastSegmentSearch      = _lastSegmentSearch;
@@ -761,4 +995,5 @@ define(function (require, exports, module) {
     exports.stringMatch             = stringMatch;
     exports.basicMatchSort          = basicMatchSort;
     exports.multiFieldSort          = multiFieldSort;
+    exports.StringMatcher           = StringMatcher;
 });

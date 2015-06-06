@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $ */
+/*global define */
 
 /**
  * DOMHelpers is a collection of functions used by the DOMAgent exports `eachNode(src, callback)`
@@ -117,7 +117,7 @@ define(function DOMHelpersModule(require, exports, module) {
      */
     function _findTag(src, skip) {
         var from, to, inc;
-        from = _find(src, [/<[a-z!\/]/, 2], skip);
+        from = _find(src, [/<[a-z!\/]/i, 2], skip);
         if (from < 0) {
             return null;
         }
@@ -125,10 +125,14 @@ define(function DOMHelpersModule(require, exports, module) {
             // html comments
             to = _find(src, "-->", from + 4);
             inc = 3;
-        } else if (src.substr(from, 7) === "<script") {
+        } else if (src.substr(from, 7).toLowerCase() === "<script") {
             // script tag
-            to = _find(src, "</script>", from + 7);
+            to = _find(src.toLowerCase(), "</script>", from + 7);
             inc = 9;
+        } else if (src.substr(from, 6).toLowerCase() === "<style") {
+            // style tag
+            to = _find(src.toLowerCase(), "</style>", from + 6);
+            inc = 8;
         } else {
             to = _find(src, ">", from + 1, true);
             inc = 1;
@@ -208,6 +212,12 @@ define(function DOMHelpersModule(require, exports, module) {
             if (content[content.length - 2] === "/") {
                 payload.closed = true;
             }
+
+            // Special handling for script/style tag since we've already collected
+            // everything up to the end tag.
+            if (payload.nodeName === "SCRIPT" || payload.nodeName === "STYLE") {
+                payload.closed = true;
+            }
         }
         return payload;
     }
@@ -220,7 +230,6 @@ define(function DOMHelpersModule(require, exports, module) {
     function eachNode(src, callback) {
         var index = 0;
         var text, range, length, payload;
-        var x = 0;
         while (index < src.length) {
 
             // find the next tag

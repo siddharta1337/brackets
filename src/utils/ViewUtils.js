@@ -27,6 +27,9 @@
 
 define(function (require, exports, module) {
     "use strict";
+
+    var _               = require("thirdparty/lodash"),
+        LanguageManager = require("language/LanguageManager");
     
     var SCROLL_SHADOW_HEIGHT = 5;
     
@@ -67,7 +70,6 @@ define(function (require, exports, module) {
             var clientHeight        = scrollElement.clientHeight,
                 outerHeight         = $displayElement.outerHeight(),
                 scrollHeight        = scrollElement.scrollHeight,
-                bottomOffset        = outerHeight - clientHeight,
                 bottomShadowOffset  = SCROLL_SHADOW_HEIGHT; // outside of shadow div viewport
             
             if (scrollHeight > clientHeight) {
@@ -125,6 +127,11 @@ define(function (require, exports, module) {
             _updateScrollerShadow($displayElement, $scrollElement, $shadowTop, $shadowBottom, isPositionFixed);
         };
         
+        // remove any previously installed listeners on this node
+        $scrollElement.off("scroll.scroller-shadow");
+        $displayElement.off("contentChanged.scroller-shadow");
+        
+        // add new ones
         $scrollElement.on("scroll.scroller-shadow", doUpdate);
         $displayElement.on("contentChanged.scroller-shadow", doUpdate);
         
@@ -154,12 +161,26 @@ define(function (require, exports, module) {
         $displayElement.off("contentChanged.scroller-shadow");
     }
     
+    /**
+     * Utility function to replace jQuery.toggleClass when used with the second argument, which needs to be a true boolean for jQuery
+     * @param {!jQueryObject} $domElement The jQueryObject to toggle the Class on
+     * @param {!string} className Class name or names (separated by spaces) to toggle
+     * @param {!boolean} addClass A truthy value to add the class and a falsy value to remove the class
+     */
+    function toggleClass($domElement, className, addClass) {
+        if (addClass) {
+            $domElement.addClass(className);
+        } else {
+            $domElement.removeClass(className);
+        }
+    }
+    
     /** 
      * Within a scrolling DOMElement, creates and positions a styled selection
      * div to align a single selected list item from a ul list element.
      *
      * Assumptions:
-     * - scrollElement is a child of the #file-section div
+     * - scrollerElement is a child of the #sidebar div
      * - ul list element fires a "selectionChanged" event after the
      *   selectedClassName is assigned to a new list item
      * 
@@ -169,9 +190,9 @@ define(function (require, exports, module) {
     function sidebarList($scrollerElement, selectedClassName, leafClassName) {
         var $listElement = $scrollerElement.find("ul"),
             $selectionMarker,
-            $selectionTriangle,
+            $selectionExtension,
             $sidebar = $("#sidebar"),
-            showTriangle = true;
+            showExtension = true;
         
         // build selectionMarker and position absolute within the scroller
         $selectionMarker = $(window.document.createElement("div")).addClass("sidebar-selection");
@@ -183,36 +204,40 @@ define(function (require, exports, module) {
         // use relative postioning for clipping the selectionMarker within the scrollElement
         $scrollerElement.css("position", "relative");
         
-        // build selectionTriangle and position fixed to the window
-        $selectionTriangle = $(window.document.createElement("div")).addClass("sidebar-selection-triangle");
+        // build selectionExtension and position fixed to the window
+        $selectionExtension = $(window.document.createElement("div")).addClass("sidebar-selection-extension");
         
-        $scrollerElement.append($selectionTriangle);
+        $scrollerElement.append($selectionExtension);
         
         selectedClassName = "." + (selectedClassName || "selected");
         
-        var updateSelectionTriangle = function () {
+        var updateSelectionExtension = function () {
             var selectionMarkerHeight = $selectionMarker.height(),
                 selectionMarkerOffset = $selectionMarker.offset(),  // offset relative to *document*
                 scrollerOffset = $scrollerElement.offset(),
-                triangleHeight = $selectionTriangle.outerHeight(),
+                selectionExtensionHeight = $selectionExtension.outerHeight(),
                 scrollerTop = scrollerOffset.top,
                 scrollerBottom = scrollerTop + $scrollerElement.outerHeight(),
-                scrollerLeft = scrollerOffset.left,
-                triangleTop = selectionMarkerOffset.top;
+                selectionExtensionTop = selectionMarkerOffset.top;
             
-            $selectionTriangle.css("top", triangleTop);
-            $selectionTriangle.css("left", $sidebar.width() - $selectionTriangle.outerWidth());
-            $selectionTriangle.toggleClass("triangle-visible", showTriangle);
+            $selectionExtension.css("top", selectionExtensionTop);
+            $selectionExtension.css("left", $sidebar.width() - $selectionExtension.outerWidth());
+            toggleClass($selectionExtension, "selectionExtension-visible", showExtension);
+                
+            var selectionExtensionClipOffsetYBy = Math.floor((selectionMarkerHeight - selectionExtensionHeight) / 2),
+                selectionExtensionBottom = selectionExtensionTop + selectionExtensionHeight + selectionExtensionClipOffsetYBy;
             
-            var triangleClipOffsetYBy = Math.floor((selectionMarkerHeight - triangleHeight) / 2),
-                triangleBottom = triangleTop + triangleHeight + triangleClipOffsetYBy;
-            
-            if (triangleTop < scrollerTop || triangleBottom > scrollerBottom) {
-                $selectionTriangle.css("clip", "rect(" + Math.max(scrollerTop - triangleTop - triangleClipOffsetYBy, 0) + "px, auto, " +
-                                           (triangleHeight - Math.max(triangleBottom - scrollerBottom, 0)) + "px, auto)");
+            if (selectionExtensionTop < scrollerTop || selectionExtensionBottom > scrollerBottom) {
+                $selectionExtension.css("clip", "rect(" + Math.max(scrollerTop - selectionExtensionTop - selectionExtensionClipOffsetYBy, 0) + "px, auto, " +
+                                           (selectionExtensionHeight - Math.max(selectionExtensionBottom - scrollerBottom, 0)) + "px, auto)");
             } else {
-                $selectionTriangle.css("clip", "");
+                $selectionExtension.css("clip", "");
             }
+        };
+        
+        var hideSelectionMarker = function (event) {
+            $selectionExtension.addClass("forced-hidden");
+            $selectionMarker.addClass("forced-hidden");
         };
         
         var updateSelectionMarker = function (event, reveal) {
@@ -220,11 +245,14 @@ define(function (require, exports, module) {
             var $listItem = $listElement.find(selectedClassName).closest("li");
             
             if (leafClassName) {
-                showTriangle = $listItem.hasClass(leafClassName);
+                showExtension = $listItem.hasClass(leafClassName);
             }
+
+            $selectionExtension.removeClass("forced-hidden");
+            $selectionMarker.removeClass("forced-hidden");
             
             // always hide selection visuals first to force layout (issue #719)
-            $selectionTriangle.hide();
+            $selectionExtension.hide();
             $selectionMarker.hide();
             
             if ($listItem.length === 1) {
@@ -238,8 +266,8 @@ define(function (require, exports, module) {
                 $selectionMarker.css("top", selectionMarkerTop);
                 $selectionMarker.show();
                 
-                updateSelectionTriangle();
-                $selectionTriangle.show();
+                updateSelectionExtension();
+                $selectionExtension.show();
             
                 // fully scroll to the selectionMarker if it's not initially in the viewport
                 var scrollerElement = $scrollerElement.get(0),
@@ -260,13 +288,15 @@ define(function (require, exports, module) {
         };
         
         $listElement.on("selectionChanged", updateSelectionMarker);
-        $scrollerElement.on("scroll", updateSelectionTriangle);
+        $scrollerElement.on("scroll", updateSelectionExtension);
+        $scrollerElement.on("selectionRedraw", updateSelectionExtension);
+        $scrollerElement.on("selectionHide", hideSelectionMarker);
         
         // update immediately
         updateSelectionMarker();
         
         // update clipping when the window resizes
-        _resizeHandlers.push(updateSelectionTriangle);
+        _resizeHandlers.push(updateSelectionExtension);
     }
     
     /**
@@ -276,6 +306,47 @@ define(function (require, exports, module) {
         _resizeHandlers.forEach(function (f) {
             f.apply();
         });
+    }
+
+    /**
+     * Determine how much of an element rect is clipped in view.
+     *
+     * @param {!DOMElement} $view - A jQuery scrolling container
+     * @param {!{top: number, left: number, height: number, width: number}}
+     *          elementRect - rectangle of element's default position/size
+     * @return {{top: number, right: number, bottom: number, left: number}}
+     *          amount element rect is clipped in each direction
+     */
+    function getElementClipSize($view, elementRect) {
+        var delta,
+            clip = { top: 0, right: 0, bottom: 0, left: 0 },
+            viewOffset = $view.offset() || { top: 0, left: 0};
+
+        // Check if element extends below viewport
+        delta = (elementRect.top + elementRect.height) - (viewOffset.top + $view.height());
+        if (delta > 0) {
+            clip.bottom = delta;
+        }
+
+        // Check if element extends above viewport
+        delta = viewOffset.top - elementRect.top;
+        if (delta > 0) {
+            clip.top = delta;
+        }
+
+        // Check if element extends to the left of viewport
+        delta = viewOffset.left - elementRect.left;
+        if (delta > 0) {
+            clip.left = delta;
+        }
+
+        // Check if element extends to the right of viewport
+        delta = (elementRect.left + elementRect.width) - (viewOffset.left + $view.width());
+        if (delta > 0) {
+            clip.right = delta;
+        }
+
+        return clip;
     }
 
     /**
@@ -293,45 +364,155 @@ define(function (require, exports, module) {
      *
      * @param {!DOMElement} $view - A jQuery scrolling container
      * @param {!DOMElement} $element - A jQuery element
-     * @param {?boolean} scrollHorizontal - whether to also scroll horizonally
+     * @param {?boolean} scrollHorizontal - whether to also scroll horizontally
      */
     function scrollElementIntoView($view, $element, scrollHorizontal) {
-        var viewOffset = $view.offset(),
-            viewScroller = $view.get(0),
-            element = $element.get(0),
-            elementOffset = $element.offset();
+        var elementOffset = $element.offset();
 
         // scroll minimum amount
-        var delta = (elementOffset.top + $element.height()) - (viewOffset.top + $view.height());
+        var elementRect = {
+                top:    elementOffset.top,
+                left:   elementOffset.left,
+                height: $element.height(),
+                width:  $element.width()
+            },
+            clip = getElementClipSize($view, elementRect);
         
-        if (delta > 0) {
+        if (clip.bottom > 0) {
             // below viewport
-            $view.scrollTop($view.scrollTop() + delta);
-        } else {
-            delta = viewOffset.top - elementOffset.top;
-            
-            if (delta > 0) {
-                // above viewport
-                $view.scrollTop($view.scrollTop() - delta);
-            }
+            $view.scrollTop($view.scrollTop() + clip.bottom);
+        } else if (clip.top > 0) {
+            // above viewport
+            $view.scrollTop($view.scrollTop() - clip.top);
         }
 
         if (scrollHorizontal) {
-            if (elementOffset.left < 0) {
-                $view.scrollLeft($view.scrollLeft() + elementOffset.left);
-            } else if (elementOffset.left + $element.width() >= viewOffset.left + $view.width()) {
-                $view.scrollLeft(elementOffset.left - viewOffset.left);
+            if (clip.left > 0) {
+                $view.scrollLeft($view.scrollLeft() - clip.left);
+            } else if (clip.right > 0) {
+                $view.scrollLeft($view.scrollLeft() + clip.right);
             }
         }
+    }
+    
+    /**
+     * HTML formats a file entry name  for display in the sidebar.
+     * @param {!File} entry File entry to display
+     * @return {string} HTML formatted string
+     */
+    function getFileEntryDisplay(entry) {
+        var name = entry.name,
+            ext = LanguageManager.getCompoundFileExtension(name),
+            i = name.lastIndexOf("." + ext);
+        
+        if (i > 0) {
+            // Escape all HTML-sensitive characters in filename.
+            name = _.escape(name.substring(0, i)) + "<span class='extension'>" + _.escape(name.substring(i)) + "</span>";
+        } else {
+            name = _.escape(name);
+        }
+        
+        return name;
+    }
+    
+    /**
+     * Determine the minimum directory path to distinguish duplicate file names
+     * for each file in list.
+     *
+     * @param {Array.<File>} files - list of Files with the same filename
+     * @return {Array.<string>} directory paths to match list of files
+     */
+    function getDirNamesForDuplicateFiles(files) {
+        // Must have at least two files in list for this to make sense
+        if (files.length <= 1) {
+            return [];
+        }
+
+        // First collect paths from the list of files and fill map with them
+        var map = {}, filePaths = [], displayPaths = [];
+        files.forEach(function (file, index) {
+            var fp = file.fullPath.split("/");
+            fp.pop(); // Remove the filename itself
+            displayPaths[index] = fp.pop();
+            filePaths[index] = fp;
+
+            if (!map[displayPaths[index]]) {
+                map[displayPaths[index]] = [index];
+            } else {
+                map[displayPaths[index]].push(index);
+            }
+        });
+
+        // This function is used to loop through map and resolve duplicate names
+        var processMap = function (map) {
+            var didSomething = false;
+            _.forEach(map, function (arr, key) {
+                // length > 1 means we have duplicates that need to be resolved
+                if (arr.length > 1) {
+                    arr.forEach(function (index) {
+                        if (filePaths[index].length !== 0) {
+                            displayPaths[index] = filePaths[index].pop() + "/" + displayPaths[index];
+                            didSomething = true;
+
+                            if (!map[displayPaths[index]]) {
+                                map[displayPaths[index]] = [index];
+                            } else {
+                                map[displayPaths[index]].push(index);
+                            }
+                        }
+                    });
+                }
+                delete map[key];
+            });
+            return didSomething;
+        };
+
+        var repeat;
+        do {
+            repeat = processMap(map);
+        } while (repeat);
+
+        return displayPaths;
+    }
+
+    function traverseViewArray(viewArray, startIndex, direction) {
+        if (Math.abs(direction) !== 1) {
+            console.error("traverseViewArray called with unsupported direction: " + direction.toString());
+            return null;
+        }
+        if (startIndex === -1) {
+            // If doc not in view list, return most recent view list item
+            if (viewArray.length > 0) {
+                return viewArray[0];
+            }
+        } else if (viewArray.length > 1) {
+            // If doc is in view list, return next/prev item with wrap-around
+            startIndex += direction;
+            if (startIndex >= viewArray.length) {
+                startIndex = 0;
+            } else if (startIndex < 0) {
+                startIndex = viewArray.length - 1;
+            }
+
+            return viewArray[startIndex];
+        }
+        
+        // If no doc open or view list empty, there is no "next" file
+        return null;
     }
     
     // handle all resize handlers in a single listener
     $(window).resize(_handleResize);
 
     // Define public API
-    exports.SCROLL_SHADOW_HEIGHT    = SCROLL_SHADOW_HEIGHT;
-    exports.addScrollerShadow       = addScrollerShadow;
-    exports.removeScrollerShadow    = removeScrollerShadow;
-    exports.sidebarList             = sidebarList;
-    exports.scrollElementIntoView   = scrollElementIntoView;
+    exports.SCROLL_SHADOW_HEIGHT         = SCROLL_SHADOW_HEIGHT;
+    exports.addScrollerShadow            = addScrollerShadow;
+    exports.removeScrollerShadow         = removeScrollerShadow;
+    exports.sidebarList                  = sidebarList;
+    exports.scrollElementIntoView        = scrollElementIntoView;
+    exports.getElementClipSize           = getElementClipSize;
+    exports.getFileEntryDisplay          = getFileEntryDisplay;
+    exports.toggleClass                  = toggleClass;
+    exports.getDirNamesForDuplicateFiles = getDirNamesForDuplicateFiles;
+    exports.traverseViewArray            = traverseViewArray;
 });

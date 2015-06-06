@@ -23,11 +23,13 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, browser: true, nomen: true, indent: 4, maxerr: 50 */
-/*global define: false, require: false, describe: false, it: false, xit: false, expect: false, beforeEach: false, afterEach: false, waitsFor: false, runs: false, jasmine: false */
+/*global define, describe, it, expect, beforeEach, afterEach, jasmine */
 /*unittests: StringMatch */
 
 define(function (require, exports, module) {
     'use strict';
+    
+    var _ = require("thirdparty/lodash");
     
     var StringMatch = require("utils/StringMatch");
     
@@ -57,7 +59,9 @@ define(function (require, exports, module) {
         
         describe("_generateMatchList", function () {
             var fSC = StringMatch._findSpecialCharacters;
+            
             var generateMatchList = StringMatch._generateMatchList;
+            
             var SpecialMatch = StringMatch._SpecialMatch;
             var NormalMatch = StringMatch._NormalMatch;
             
@@ -73,79 +77,82 @@ define(function (require, exports, module) {
             
             var path = "src/document/DocumentCommandHandler.js";
             var specialsInfo = fSC(path);
-            path = path.toLowerCase();
+            var pathLower = path.toLowerCase();
             
             it("should return undefined for no matches", function () {
-                var result = generateMatchList("foo", path, specialsInfo.specials, 0);
+                var result = generateMatchList("foo", pathLower, "foo", path, specialsInfo.specials, 0);
                 expect(result).toEqual(null);
             });
             
             it("should return an array with specials matches", function () {
-                var result = generateMatchList("d", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                var result = generateMatchList("d", pathLower, "d", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new SpecialMatch(13)]);
                 
-                result = generateMatchList("ch", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                result = generateMatchList("ch", pathLower, "ch", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new SpecialMatch(21), new SpecialMatch(28)]);
             });
             
             it("should try contiguous matches as well, but prefer specials", function () {
-                var result = generateMatchList("do", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                var result = generateMatchList("do", pathLower, "do", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new SpecialMatch(13), new NormalMatch(14)]);
                 
-                result = generateMatchList("doc", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                result = generateMatchList("doc", pathLower, "doc", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new SpecialMatch(13), new NormalMatch(14), new SpecialMatch(21)]);
                 
-                result = generateMatchList("doch", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                result = generateMatchList("doch", pathLower, "doch", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new SpecialMatch(13), new NormalMatch(14), new SpecialMatch(21), new SpecialMatch(28)]);
             });
             
             it("should handle contiguous matches that stand alone", function () {
-                var result = generateMatchList("o", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                var result = generateMatchList("o", pathLower, "o", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new NormalMatch(14)]);
             });
             
             it("should recognize non-matches", function () {
-                var result = generateMatchList("ham", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                var result = generateMatchList("ham", pathLower, "ham", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual(null);
             });
             
             it("should backtrack as needed", function () {
-                var result = generateMatchList("cu", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                var result = generateMatchList("cu", pathLower, "cu", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual([new NormalMatch(15), new NormalMatch(16)]);
                 
-                result = generateMatchList("dcho", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
+                result = generateMatchList("dcho", pathLower, "dcho", path, specialsInfo.specials, specialsInfo.lastSegmentSpecialsIndex);
                 expect(result).toEqual(null);
                 
                 var btpath = "MamoMeMiMoMu";
                 var btspecials = fSC(btpath);
-                btpath = btpath.toLowerCase();
+                var btpathLower = btpath.toLowerCase();
                 
-                result = generateMatchList("m", btpath, btspecials.specials, 0);
+                result = generateMatchList("m", btpathLower, "m", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(0)]);
                 
-                result = generateMatchList("mu", btpath, btspecials.specials, 0);
+                result = generateMatchList("mu", btpathLower, "mu", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(0), new NormalMatch(11)]);
                 
-                result = generateMatchList("mamo", btpath, btspecials.specials, 0);
+                result = generateMatchList("mamo", btpathLower, "mamo", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(0), new NormalMatch(1), new SpecialMatch(4), new NormalMatch(9)]);
                 
                 btpath = "AbcdefzBcdefCdefDefEfF";
                 btspecials = fSC(btpath);
-                btpath = btpath.toLowerCase();
+                btpathLower = btpath.toLowerCase();
                 
-                result = generateMatchList("f", btpath, btspecials.specials, 0);
+                result = generateMatchList("f", btpathLower, "f", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(21)]);
                 
-                result = generateMatchList("abcdefz", btpath, btspecials.specials, 0);
+                result = generateMatchList("abcdefz", btpathLower, "abcdefz", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(0), new NormalMatch(1), new NormalMatch(2), new NormalMatch(3), new NormalMatch(4), new NormalMatch(5), new NormalMatch(6)]);
+
+                result = generateMatchList("abcdefz", btpathLower, "ABCDEFZ", btpath, btspecials.specials, 0);
+                expect(result).toEqual([new SpecialMatch(0, true), new NormalMatch(1), new NormalMatch(2), new NormalMatch(3), new NormalMatch(4), new NormalMatch(5), new NormalMatch(6)]);
                 
-                result = generateMatchList("abcdefe", btpath, btspecials.specials, 0);
+                result = generateMatchList("abcdefe", btpathLower, "abcdefe", btpath, btspecials.specials, 0);
                 expect(result).toEqual([new SpecialMatch(0), new SpecialMatch(7), new SpecialMatch(12), new SpecialMatch(16), new NormalMatch(17), new NormalMatch(18), new SpecialMatch(19)]);
                 
                 var str = "_computeRangesAndScore";
                 var strSpecials = fSC(str);
-                str = str.toLowerCase();
-                result = generateMatchList("_computerangesa", str, strSpecials.specials, 0);
+                var strLower = str.toLowerCase();
+                result = generateMatchList("_computerangesa", strLower, "_computerangesa", str, strSpecials.specials, 0);
                 expect(result).toEqual([
                     new SpecialMatch(0), new SpecialMatch(1), new NormalMatch(2),
                     new NormalMatch(3), new NormalMatch(4), new NormalMatch(5),
@@ -189,6 +196,7 @@ define(function (require, exports, module) {
         describe("_lastSegmentSearch", function () {
             var SpecialMatch = StringMatch._SpecialMatch;
             var NormalMatch = StringMatch._NormalMatch;
+            
             beforeEach(function () {
                 SpecialMatch.prototype.type = "special";
                 NormalMatch.prototype.type = "normal";
@@ -204,23 +212,26 @@ define(function (require, exports, module) {
                 var comparePath = path.toLowerCase();
                 var _lastSegmentSearch = StringMatch._lastSegmentSearch;
                 var sc = StringMatch._findSpecialCharacters(path);
-                expect(_lastSegmentSearch("d", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("d", comparePath, "d", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13)
                     ]
                 });
                 
-                expect(_lastSegmentSearch("do", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("do", comparePath, "do", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14)
                     ]
                 });
                 
-                expect(_lastSegmentSearch("doc", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("doc", comparePath, "doc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14),
@@ -228,8 +239,9 @@ define(function (require, exports, module) {
                     ]
                 });
                 
-                expect(_lastSegmentSearch("docc", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("docc", comparePath, "docc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14),
@@ -238,8 +250,9 @@ define(function (require, exports, module) {
                     ]
                 });
 
-                expect(_lastSegmentSearch("docch", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("docch", comparePath, "docch", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14),
@@ -249,8 +262,9 @@ define(function (require, exports, module) {
                     ]
                 });
                 
-                expect(_lastSegmentSearch("docch.js", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("docch.js", comparePath, "docch.js", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14),
@@ -263,8 +277,9 @@ define(function (require, exports, module) {
                     ]
                 });
                 
-                expect(_lastSegmentSearch("ocu", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("ocu", comparePath, "ocu", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new NormalMatch(14),
                         new NormalMatch(15),
@@ -272,8 +287,9 @@ define(function (require, exports, module) {
                     ]
                 });
                 
-                expect(_lastSegmentSearch("ocuha", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("ocuha", comparePath, "ocuha", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "",
+                    originalRemainder: "",
                     matchList: [
                         new NormalMatch(14),
                         new NormalMatch(15),
@@ -283,11 +299,12 @@ define(function (require, exports, module) {
                     ]
                 });
                 
-                expect(_lastSegmentSearch("z", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
-                expect(_lastSegmentSearch("ocuz", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
+                expect(_lastSegmentSearch("z", comparePath, "z", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
+                expect(_lastSegmentSearch("ocuz", comparePath, "ocuz", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
                 
-                expect(_lastSegmentSearch("sdoc", comparePath, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
+                expect(_lastSegmentSearch("sdoc", comparePath, "sdoc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual({
                     remainder: "s",
+                    originalRemainder: "s",
                     matchList: [
                         new SpecialMatch(13),
                         new NormalMatch(14),
@@ -304,7 +321,7 @@ define(function (require, exports, module) {
                 var comparePath = path.toLowerCase();
                 var _lastSegmentSearch = StringMatch._lastSegmentSearch;
                 var sc = StringMatch._findSpecialCharacters(path);
-                expect(_lastSegmentSearch("ocud", comparePath, sc.specials, 0)).toEqual(null);
+                expect(_lastSegmentSearch("ocud", comparePath, "ocud", path, sc.specials, 0)).toEqual(null);
             });
             
             it("should compare matches that don't fit in just the final segment", function () {
@@ -313,22 +330,24 @@ define(function (require, exports, module) {
                 var wholeStringSearch = StringMatch._wholeStringSearch;
                 var sc = StringMatch._findSpecialCharacters(path);
                 
-                expect(wholeStringSearch("sdoc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                var comparePath = path.toLowerCase();
+                
+                expect(wholeStringSearch("sdoc", comparePath, "sdoc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(0),
                     new SpecialMatch(13),
                     new NormalMatch(14),
                     new SpecialMatch(21)
                 ]);
                 
-                expect(wholeStringSearch("doc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                expect(wholeStringSearch("doc", comparePath, "doc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(13),
                     new NormalMatch(14),
                     new SpecialMatch(21)
                 ]);
                 
-                expect(wholeStringSearch("z", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
+                expect(wholeStringSearch("z", comparePath, "z", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
                 
-                expect(wholeStringSearch("docdoc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                expect(wholeStringSearch("docdoc", comparePath, "docdoc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(4),
                     new NormalMatch(5),
                     new NormalMatch(6),
@@ -338,7 +357,7 @@ define(function (require, exports, module) {
                 ]);
                 
                 // test for a suspected bug where specials are matched out of order.
-                expect(wholeStringSearch("hc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
+                expect(wholeStringSearch("hc", comparePath, "hc", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual(null);
             });
             
             it("should handle matches that don't fit at all in the final segment", function () {
@@ -347,7 +366,9 @@ define(function (require, exports, module) {
                 var wholeStringSearch = StringMatch._wholeStringSearch;
                 var sc = StringMatch._findSpecialCharacters(path);
                 
-                expect(wholeStringSearch("quick", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                var comparePath = path.toLowerCase();
+                
+                expect(wholeStringSearch("quick", comparePath, "quick", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(23),
                     new NormalMatch(24),
                     new NormalMatch(25),
@@ -355,7 +376,7 @@ define(function (require, exports, module) {
                     new NormalMatch(27)
                 ]);
                 
-                expect(wholeStringSearch("quickopen", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                expect(wholeStringSearch("quickopen", comparePath, "quickopen", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(23),
                     new NormalMatch(24),
                     new NormalMatch(25),
@@ -367,7 +388,7 @@ define(function (require, exports, module) {
                     new NormalMatch(39)
                 ]);
                                 
-                expect(wholeStringSearch("quickopenain", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
+                expect(wholeStringSearch("quickopenain", comparePath, "quickopenain", path, sc.specials, sc.lastSegmentSpecialsIndex)).toEqual([
                     new SpecialMatch(23),
                     new NormalMatch(24),
                     new NormalMatch(25),
@@ -415,7 +436,7 @@ define(function (require, exports, module) {
                 ranges = result.stringRanges;
                 expect(ranges.length).toBe(3);
                 
-                expect(stringMatch("src/search/QuickOpen.js", "qo")).toEqual({
+                expect(stringMatch("src/search/QuickOpen.js", "qo", { segmentedSearch: true })).toEqual({
                     matchGoodness: jasmine.any(Number),
                     label: "src/search/QuickOpen.js",
                     stringRanges: [
@@ -439,7 +460,7 @@ define(function (require, exports, module) {
             });
             
             it("should prefer special characters", function () {
-                expect(stringMatch("src/document/DocumentCommandHandler.js", "dch")).toEqual({
+                expect(stringMatch("src/document/DocumentCommandHandler.js", "dch", { segmentedSearch: true })).toEqual({
                     matchGoodness: jasmine.any(Number),
                     label: "src/document/DocumentCommandHandler.js",
                     stringRanges: [
@@ -454,11 +475,110 @@ define(function (require, exports, module) {
                 });
             });
             
+            it("should optionally prefer prefix matches", function () {
+                expect(stringMatch("stringTimeRing", "str", {
+                    preferPrefixMatches: true
+                })).toEqual({
+                    matchGoodness: -Number.MAX_VALUE,
+                    label: "stringTimeRing",
+                    stringRanges: [
+                        { text: "str", matched: true, includesLastSegment: true },
+                        { text: "ingTimeRing", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                expect(stringMatch("stringTimeRing", "STR", {
+                    preferPrefixMatches: true
+                })).toEqual({
+                    matchGoodness: -Number.MAX_VALUE * 0.5,
+                    label: "stringTimeRing",
+                    stringRanges: [
+                        { text: "str", matched: true, includesLastSegment: true },
+                        { text: "ingTimeRing", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                expect(stringMatch("STRINGTimeRing", "str", {
+                    preferPrefixMatches: true
+                })).toEqual({
+                    matchGoodness: -Number.MAX_VALUE * 0.5,
+                    label: "STRINGTimeRing",
+                    stringRanges: [
+                        { text: "STR", matched: true, includesLastSegment: true },
+                        { text: "INGTimeRing", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                expect(stringMatch("src/foo/bar/src.js", "src", {
+                    preferPrefixMatches: true
+                })).toEqual({
+                    matchGoodness: -Number.MAX_VALUE,
+                    label: "src/foo/bar/src.js",
+                    stringRanges: [
+                        { text: "src", matched: true, includesLastSegment: true },
+                        { text: "/foo/bar/src.js", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                var result = stringMatch("src/foo/bar/src.js", "fbs", {
+                    preferPrefixMatches: true
+                });
+                
+                expect(result).toEqual({
+                    matchGoodness: jasmine.any(Number),
+                    label: "src/foo/bar/src.js",
+                    stringRanges: [
+                        { text: "src/", matched: false, includesLastSegment: true },
+                        { text: "f", matched: true, includesLastSegment: true },
+                        { text: "oo/", matched: false, includesLastSegment: true },
+                        { text: "b", matched: true, includesLastSegment: true },
+                        { text: "ar/", matched: false, includesLastSegment: true },
+                        { text: "s", matched: true, includesLastSegment: true },
+                        { text: "rc.js", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                expect(result.matchGoodness).toBeGreaterThan(-Number.MAX_VALUE);
+
+                expect(stringMatch("long", "longerQuery", {
+                    preferPrefixMatches: true
+                })).toEqual(null);
+            });
+            
+            it("should default to single segment matches", function () {
+                var expectedResult = {
+                    matchGoodness: jasmine.any(Number),
+                    label: "brackets/utils/brackets.js",
+                    stringRanges: [
+                        { text: "brack", matched: true, includesLastSegment: true },
+                        { text: "ets/utils/brackets.js", matched: false, includesLastSegment: true }
+                    ]
+                };
+                
+                expect(stringMatch("brackets/utils/brackets.js", "brack")).toEqual(expectedResult);
+                
+                expect(stringMatch("brackets/utils/brackets.js", "brack", { segmentedSearch: false })).toEqual(expectedResult);
+            });
+            
+            it("should handle slash after separator the right way", function () {
+                var result = stringMatch("brackets_/LICENSE", "brack", { segmentedSearch: true });
+                expect(result).toEqual({
+                    matchGoodness: jasmine.any(Number),
+                    label: "brackets_/LICENSE",
+                    stringRanges: [
+                        { text: "brack", matched: true, includesLastSegment: false },
+                        { text: "ets_/LICENSE", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                expect(result.matchGoodness).toBeGreaterThan(-Number.MAX_VALUE);
+            });
+            
             var goodRelativeOrdering = function (query, testStrings) {
                 var lastScore = -Infinity;
                 var goodOrdering = true;
                 testStrings.forEach(function (str) {
-                    var result = stringMatch(str, query);
+                    var result = stringMatch(str, query, { segmentedSearch: true });
                     
                     // note that matchGoodness is expressed in negative numbers
                     if (result.matchGoodness < lastScore) {
@@ -473,7 +593,7 @@ define(function (require, exports, module) {
                 expect(goodRelativeOrdering("quick", [
                     "src/search/QuickOpen.js",
                     "test/spec/QuickOpen-test.js",
-                    "samples/root/Getting Started/screenshots/brackets-quick-edit.png",
+                    "samples/root/Getting Started/screenshots/quick-edit.png",
                     "src/extensions/default/QuickOpenCSS/main.js"
                 ])).toBe(true);
             });
@@ -545,8 +665,51 @@ define(function (require, exports, module) {
             
             it("should find the right jsu", function () {
                 expect(goodRelativeOrdering("jsu", [
-                    "src/language/JSLintUtils.js",
-                    "src/language/JSUtil.js"
+                    "src/language/JSUtil.js",
+                    "src/language/JSLintUtils.js"
+                ])).toBe(true);
+            });
+            
+            it("should find the right trange", function () {
+                expect(goodRelativeOrdering("trange", [
+                    "src/document/TextRange.js",
+                    "src/extensions/default/JavaScriptQuickEdit/unittest-files/jquery-ui/demos/slider/range.html"
+                ])).toBe(true);
+            });
+            
+            it("should prefer prefix matches", function () {
+                expect(goodRelativeOrdering("asc", [
+                    "ASC.js",
+                    "ActionScriptCompiler.js"
+                ])).toBe(true);
+                expect(goodRelativeOrdering("st", [
+                    "str",
+                    "String",
+                    "stringMatch",
+                    "StringMatcher",
+                    "screenTop",
+                    "scrollTo",
+                    "setTimeout",
+                    "switch"
+                ])).toBe(true);
+            });
+            
+            it("should have good ordering with case matches", function () {
+                expect(goodRelativeOrdering("func", [
+                    "function",
+                    "Function"
+                ])).toBe(true);
+                expect(goodRelativeOrdering("Func", [
+                    "Function",
+                    "function"
+                ])).toBe(true);
+                expect(goodRelativeOrdering("Pack", [
+                    "Package.js",
+                    "package.json"
+                ])).toBe(true);
+                expect(goodRelativeOrdering("Pack", [
+                    "src/extensibility/Package.js",
+                    "package.json"
                 ])).toBe(true);
             });
         });
@@ -590,6 +753,193 @@ define(function (require, exports, module) {
             it("should try to prioritize points for the last segment", function () {
                 var result = StringMatch.stringMatch("abc/def/zzz/abc/def", "abc/def");
                 expect(result.scoreDebug.lastSegment).toBeGreaterThan(0);
+            });
+        });
+        
+        describe("multiFieldSort", function () {
+            var items = [
+                { value: 105, name: "Strawberry" },
+                { value: 51, name: "Grapefruit" },
+                { value: 200, name: "Apple" },
+                { value: 200, name: "_Rutabega" },
+                { value: 199, name: "Apple" },
+                { value: 200, name: "Banana" }
+            ];
+            
+            it("should accept old-style key: priority", function () {
+                // start with a copy of the array
+                var result = _.clone(items);
+                StringMatch.multiFieldSort(result, {
+                    value: 0,
+                    name: 1
+                });
+                expect(result).toEqual([
+                    { value: 51, name: "Grapefruit" },
+                    { value: 105, name: "Strawberry" },
+                    { value: 199, name: "Apple" },
+                    { value: 200, name: "_Rutabega" },
+                    { value: 200, name: "Apple" },
+                    { value: 200, name: "Banana" }
+                ]);
+            });
+            
+            it("should accept array of keys", function () {
+                var result = _.clone(items);
+                StringMatch.multiFieldSort(result, ["value", "name"]);
+                expect(result).toEqual([
+                    { value: 51, name: "Grapefruit" },
+                    { value: 105, name: "Strawberry" },
+                    { value: 199, name: "Apple" },
+                    { value: 200, name: "_Rutabega" },
+                    { value: 200, name: "Apple" },
+                    { value: 200, name: "Banana" }
+                ]);
+            });
+            
+            it("should accept a comparison function", function () {
+                var result = _.clone(items);
+                StringMatch.multiFieldSort(result, ["value", function (a, b) {
+                    var aName = a.name.toLowerCase(), bName = b.name.toLowerCase();
+                    // this sort function will cause _ to sort lower than lower case
+                    // alphabetical letters
+                    if (aName[0] === "_" && bName[0] !== "_") {
+                        return 1;
+                    } else if (bName[0] === "_" && aName[0] !== "_") {
+                        return -1;
+                    }
+                    if (aName < bName) {
+                        return -1;
+                    } else if (aName > bName) {
+                        return 1;
+                    }
+                    return 0;
+                }]);
+                expect(result).toEqual([
+                    { value: 51, name: "Grapefruit" },
+                    { value: 105, name: "Strawberry" },
+                    { value: 199, name: "Apple" },
+                    { value: 200, name: "Apple" },
+                    { value: 200, name: "Banana" },
+                    { value: 200, name: "_Rutabega" }
+                ]);
+            });
+        });
+        
+        describe("StringMatcher", function () {
+            beforeEach(function () {
+                this.addMatchers({
+                    toBeInCache: function (matcher, cacheName) {
+                        var value = matcher[cacheName][this.actual];
+                        var notText = this.isNot ? " not" : "";
+                        
+                        this.message = function () {
+                            return "Expected " + cacheName + " to" + notText + " contain key " + this.actual;
+                        };
+                        
+                        return value !== undefined;
+                    }
+                });
+            });
+            
+            it("should manage its caches properly", function () {
+                var matcher = new StringMatch.StringMatcher();
+                expect(matcher._noMatchCache).toEqual({});
+                expect(matcher._specialsCache).toEqual({});
+                
+                matcher.match("test/spec/LiveDevelopment-test.js", "spec/live");
+                expect("test/spec/LiveDevelopment-test.js").toBeInCache(matcher, "_specialsCache");
+                expect("test/spec/LiveDevelopment-test.js").not.toBeInCache(matcher, "_noMatchCache");
+                
+                matcher.match("foo", "spec/live");
+                expect("foo").toBeInCache(matcher, "_specialsCache");
+                expect("foo").toBeInCache(matcher, "_noMatchCache");
+                
+                matcher.match("test/spec/LiveDevelopment-test.js", "spec/lived");
+                // verify that the noMatchCache is still populated
+                expect("foo").toBeInCache(matcher, "_noMatchCache");
+                
+                // a shorter/different string should invalidate the noMatchCache
+                // but not the specialsCache
+                matcher.match("test/spec/LiveDevelopment-test.js", "spec/liv");
+                expect("foo").toBeInCache(matcher, "_specialsCache");
+                expect("foo").not.toBeInCache(matcher, "_noMatchCache");
+            });
+            
+            it("should handle collisions with built-in members", function () {
+                var matcher = new StringMatch.StringMatcher();
+                
+                // Object.prototype has toString
+                var toStringResult = matcher.match("toString", "t");
+                expect(toStringResult).toBeTruthy();
+                toStringResult = matcher.match("toString", "x");
+                expect(toStringResult).toBeFalsy();
+                toStringResult = matcher.match("toString", "xx");   // 2nd no-match to test _noMatchCache
+                expect(toStringResult).toBeFalsy();
+                
+                // Array.prototype has length
+                var lengthResult = matcher.match("length", "l");
+                expect(lengthResult).toBeTruthy();
+                lengthResult = matcher.match("length", "x");
+                expect(lengthResult).toBeFalsy();
+                lengthResult = matcher.match("length", "xx");   // 2nd no-match to test _noMatchCache
+                expect(lengthResult).toBeFalsy();
+                
+                // Object.prototype has hasOwnProperty
+                var hasOwnPropertyResult = matcher.match("hasOwnProperty", "h");
+                expect(hasOwnPropertyResult).toBeTruthy();
+                hasOwnPropertyResult = matcher.match("hasOwnProperty", "x");
+                expect(hasOwnPropertyResult).toBeFalsy();
+                hasOwnPropertyResult = matcher.match("hasOwnProperty", "xx");   // 2nd no-match to test _noMatchCache
+                expect(hasOwnPropertyResult).toBeFalsy();
+            });
+            
+            it("can reset the caches", function () {
+                var matcher = new StringMatch.StringMatcher();
+                matcher.match("foo", "spec/live");
+                expect("foo").toBeInCache(matcher, "_specialsCache");
+                expect("foo").toBeInCache(matcher, "_noMatchCache");
+                matcher.reset();
+                expect("foo").not.toBeInCache(matcher, "_specialsCache");
+                expect("foo").not.toBeInCache(matcher, "_noMatchCache");
+            });
+            
+            it("should accept the prefixes option", function () {
+                var matcher = new StringMatch.StringMatcher({
+                    preferPrefixMatches: true
+                });
+                var result = matcher.match("stringTimeRing", "str");
+                expect(result.stringRanges[0]).toEqual(
+                    { text: "str", matched: true, includesLastSegment: true }
+                );
+            });
+                    
+            it("should pass the segmentedSearch option", function () {
+                var matcher = new StringMatch.StringMatcher({
+                    segmentedSearch: false
+                });
+                
+                expect(matcher.match("brackets/utils/brackets.js", "brack")).toEqual({
+                    matchGoodness: jasmine.any(Number),
+                    label: "brackets/utils/brackets.js",
+                    stringRanges: [
+                        { text: "brack", matched: true, includesLastSegment: true },
+                        { text: "ets/utils/brackets.js", matched: false, includesLastSegment: true }
+                    ]
+                });
+                
+                matcher = new StringMatch.StringMatcher({
+                    segmentedSearch: true
+                });
+                
+                expect(matcher.match("brackets/utils/brackets.js", "brack")).toEqual({
+                    matchGoodness: jasmine.any(Number),
+                    label: "brackets/utils/brackets.js",
+                    stringRanges: [
+                        { text: "brackets/utils/", matched: false, includesLastSegment: false },
+                        { text: "brack", matched: true, includesLastSegment: true },
+                        { text: "ets.js", matched: false, includesLastSegment: true }
+                    ]
+                });
             });
         });
     });

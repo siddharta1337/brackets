@@ -31,3 +31,23 @@ pre {
         font-size: 11px;
     }
 }
+
+.link-to-source {
+    /* Behavioral style - indicates that clicking opens a file in the parent Brackets window */
+}
+/* De-emphasize source links to Jasmine framework code (vs. links to test spec & Brackets core code) */
+.testframework-link {
+    opacity: 0.45;
+}
+
+/* Add some space between the menu and the list of tests.  */
+.container-fluid {
+    margin-top: 1.5em;
+}
+
+@media (min-width: 728px) and (max-width: 1199px) {
+    .navbar-fixed-top .container,
+    .navbar-fixed-bottom .container {
+        width: 800px;
+    }
+}

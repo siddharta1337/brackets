@@ -22,22 +22,29 @@
  */
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50 */
-/*global define, brackets, window */
+/*global $, define, brackets, window */
 
 /**
  * This file provides the interface to user visible strings in Brackets. Code that needs
- * to display strings should should load this module by calling var Strings = require("strings").
+ * to display strings should should load this module by calling `var Strings = require("strings")`.
  * The i18n plugin will dynamically load the strings for the right locale and populate
  * the exports variable. See src\nls\strings.js for the master file of English strings.
  */
 define(function (require, exports, module) {
     "use strict";
     
+    var _ = require("thirdparty/lodash");
+    
     var strings     = require("i18n!nls/strings"),
-        Global      = require("utils/Global"),
+        urls        = require("i18n!nls/urls"),
+        stringsApp  = require("i18n!nls/strings-app"),
         StringUtils = require("utils/StringUtils");
 
-    var additionalGlobals = {},
+    // make sure the global brackets variable is loaded
+    require("utils/Global");
+
+    // Add URLs as additional globals
+    var additionalGlobals = $.extend({}, urls),
         parsedVersion = /([0-9]+)\.([0-9]+)\.([0-9]+)/.exec(brackets.metadata.version);
     
     additionalGlobals.APP_NAME      = brackets.metadata.name || strings.APP_NAME;
@@ -49,13 +56,26 @@ define(function (require, exports, module) {
     additionalGlobals.VERSION_PATCH = parsedVersion[3];
 
     var isDevBuild = !StringUtils.endsWith(decodeURI(window.location.pathname), "/www/index.html");
-    additionalGlobals.BUILD_TYPE    = (isDevBuild ? strings.DEVELOPMENT_BUILD : strings.EXPERIMENTAL_BUILD);
+    if (isDevBuild) {
+        additionalGlobals.BUILD_TYPE = strings.DEVELOPMENT_BUILD;
+    } else {
+        var isReleaseBuild = (brackets.platform === "mac" || brackets.platform === "win");
+        additionalGlobals.BUILD_TYPE = (isReleaseBuild ? strings.RELEASE_BUILD : strings.EXPERIMENTAL_BUILD);
+    }
     
     // Insert application strings
-    Object.keys(strings).forEach(function (key) {
-        Object.keys(additionalGlobals).forEach(function (name) {
+    _.forEach(strings, function (value, key) {
+        _.forEach(additionalGlobals, function (item, name) {
             strings[key] = strings[key].replace(new RegExp("{" + name + "}", "g"), additionalGlobals[name]);
         });
+    });
+    
+    // Append or overlay additional, product-specific strings
+    _.forEach(stringsApp, function (value, key) {
+        _.forEach(additionalGlobals, function (item, name) {
+            stringsApp[key] = stringsApp[key].replace(new RegExp("{" + name + "}", "g"), additionalGlobals[name]);
+        });
+        strings[key] = stringsApp[key];
     });
 
     module.exports = strings;

@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50 */
-/*global define, brackets, $, require, Mustache, navigator  */
+/*global define, brackets, require, Mustache */
 
 
 require.config({
@@ -57,19 +57,17 @@ define(function (require, exports, module) {
     function testCommand() {
         alert(Strings.ALERT_MESSAGE);
 
-        Dialogs.showModalDialog("sample-localized-dialog");
+        // Localize the dialog using Strings as the datasource and use it as the dialog template
+        var localizedTemplate = Mustache.render(browserWrapperHtml, Strings);
+        Dialogs.showModalDialogUsingTemplate(localizedTemplate);
     }
 
 
     // Register the command
     // A localized command name is used by passing in Strings.COMMAND_NAME
     var myCommandID = "localizationExample.command";
-    var command = CommandManager.register(Strings.COMMAND_NAME, myCommandID, testCommand);
+    CommandManager.register(Strings.COMMAND_NAME, myCommandID, testCommand);
 
     var menu = Menus.getMenu(Menus.AppMenuBar.EDIT_MENU);
     menu.addMenuItem(myCommandID, null, Menus.AFTER, myCommandID);
-   
-    // Localize the dialog using Strings as the datasource and insert it into the DOM
-    var localizedHTML = $(Mustache.render(browserWrapperHtml, Strings));
-    $('body').append(localizedHTML);
 });

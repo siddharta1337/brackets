@@ -1,5 +1,5 @@
-{
-    "file.new":  [
+﻿{
+    "file.newDoc":  [
         "Ctrl-N"
     ],
     "file.open":  [
@@ -7,6 +7,9 @@
     ],
     "file.close":  [
         "Ctrl-W"
+    ],
+    "file.openFolder": [
+        "Ctrl-Alt-O"
     ],
     "file.close_all":  [
         "Ctrl-Shift-W"
@@ -17,8 +20,16 @@
     "file.saveAll":  [
         "Ctrl-Alt-S"
     ],
+    "file.saveAs":  [
+        "Ctrl-Shift-S"
+    ],    
     "file.liveFilePreview":  [
         "Ctrl-Alt-P"
+    ],
+    "file.reloadLivePreview": [
+        {
+            "key": "Ctrl-Shift-R"
+        }
     ],
     "file.previewHighlight":  [
         "Ctrl-Shift-C"
@@ -59,37 +70,35 @@
             "platform": "mac"
         }
     ],
-    "edit.find":  [
-        "Ctrl-F"
-    ],
-    "edit.findInFiles":  [
-        "Ctrl-Shift-F"
-    ],
-    "edit.findNext":  [
+    "edit.splitSelIntoLines": [
         {
-            "key": "F3"
+           "key": "Ctrl-Alt-L"
         },
         {
-            "key": "Cmd-G",
-            "platform": "mac"
+           "key":"Ctrl-Shift-L",
+           "platform": "linux"
         }
     ],
-    "edit.findPrevious":  [
+    "edit.addCursorToPrevLine": [
         {
-            "key": "Shift-F3"
-        },
-        {
-            "key": "Cmd-Shift-G",
-            "platform": "mac"
+            "key": "Shift-Alt-Up",
+            "displayKey": "Shift-Alt-↑"
         }
     ],
-    "edit.replace":  [
+    "edit.addCursorToNextLine": [
         {
-            "key": "Ctrl-H"
-        },
+            "key": "Shift-Alt-Down",
+            "displayKey": "Shift-Alt-↓"
+        }
+    ],
+    "edit.indent":  [
         {
-            "key": "Cmd-Alt-F",
-            "platform": "mac"
+            "key": "Ctrl-]"
+        }
+    ],
+    "edit.unindent":  [
+        {
+            "key": "Ctrl-["
         }
     ],
     "edit.duplicate":  [
@@ -120,6 +129,12 @@
             "platform": "mac"
         }
     ],
+    "edit.openLineAbove":  [
+        "Ctrl-Shift-Enter"
+    ],
+    "edit.openLineBelow":  [
+        "Ctrl-Enter"
+    ],
     "edit.lineComment":  [
         "Ctrl-/"
     ],
@@ -132,27 +147,124 @@
             "platform": "mac"
         }
     ],
+    "edit.showCodeHints":  [
+        {
+            "key": "Ctrl-Space"
+        },
+        {
+            "key": "Ctrl-Space",
+            "platform": "mac"
+        }
+    ],
+    "cmd.find":  [
+        "Ctrl-F"
+    ],
+    "cmd.findInFiles":  [
+        "Ctrl-Shift-F"
+    ],
+    "cmd.replaceInFiles":  [
+        {
+            "key": "Ctrl-Shift-H"
+        },
+        {
+            "key": "Cmd-Opt-Shift-F",
+            "platform": "mac"
+        }
+    ],
+    "cmd.findNext":  [
+        {
+            "key": "F3"
+        },
+        {
+            "key": "Cmd-G",
+            "platform": "mac"
+        }
+    ],
+    "cmd.findPrevious":  [
+        {
+            "key": "Shift-F3"
+        },
+        {
+            "key": "Cmd-Shift-G",
+            "platform": "mac"
+        }
+    ],
+    "cmd.findAllAndSelect": [
+        {
+            "key": "Alt-F3"
+        },
+        {
+            "key": "Cmd-Ctrl-G",
+            "platform": "mac"
+        }
+    ],
+    "cmd.addNextMatch": [
+        {
+            "key": "Ctrl-B"
+        }
+    ],
+    "cmd.skipCurrentMatch": [
+        {
+            "key": "Ctrl-Shift-B"
+        }
+    ],
+    "cmd.replace":  [
+        {
+            "key": "Ctrl-H"
+        },
+        {
+            "key": "Cmd-Opt-F",
+            "platform": "mac"
+        }
+    ],
     "view.hideSidebar":  [
-        "Ctrl-Shift-H"
+        {   
+            "key" : "Ctrl-Alt-H"
+        },
+        {
+            "key": "Cmd-Shift-H",
+            "platform": "mac"
+        }
     ],
     "view.increaseFontSize":  [
         {
             "key": "Ctrl-=",
-            "displayKey": "Cmd-+"
+            "displayKey": "Ctrl-+"
         },
         {
-            "key": "Ctrl-+",
-            "displayKey": "Cmd-+"
+            "key": "Ctrl-+"
         }
     ],
     "view.decreaseFontSize":  [
         {
             "key": "Ctrl--",
-            "displayKey": "Cmd-−"
+            "displayKey": "Ctrl-−"
         }
     ],
     "view.restoreFontSize":  [
         "Ctrl-0"
+    ],
+    "view.scrollLineUp":  [
+        {
+            "key": "Ctrl-Up",
+            "displayKey": "Ctrl-\u2191"
+        },
+        {
+            "key": "Ctrl-Opt-Up",
+            "displayKey": "Ctrl-Opt-\u2191",
+            "platform": "mac"
+        }
+    ],
+    "view.scrollLineDown":  [
+        {
+            "key": "Ctrl-Down",
+            "displayKey": "Ctrl-\u2193"
+        },
+        {
+            "key": "Ctrl-Opt-Down",
+            "displayKey": "Ctrl-Opt-\u2193",
+            "platform": "mac"
+        }
     ],
     "navigate.quickOpen":  [
         "Ctrl-Shift-O"
@@ -169,7 +281,10 @@
     "navigate.gotoDefinition":  [
         "Ctrl-T"
     ],
-    "navigate.gotoJSLintError":  [
+    "navigate.jumptoDefinition":  [
+        "Ctrl-J"
+    ],
+    "navigate.gotoFirstProblem":  [
         {
             "key": "F8"
         },
@@ -185,6 +300,10 @@
         {
             "key": "Ctrl-Tab",
             "platform": "mac"
+        },
+        {
+            "key": "Cmd-Shift-]",
+            "platform": "mac"
         }
     ],
     "navigate.prevDoc":  [
@@ -194,10 +313,17 @@
         {
             "key": "Ctrl-Shift-Tab",
             "platform": "mac"
+        },
+        {
+            "key": "Cmd-Shift-[",
+            "platform": "mac"
         }
     ],
     "navigate.toggleQuickEdit":  [
         "Ctrl-E"
+    ],
+    "navigate.toggleQuickDocs":  [
+        "Ctrl-K"
     ],
     "navigate.previousMatch":  [
         {
@@ -211,25 +337,13 @@
             "displayKey": "Alt-↓"
         }
     ],
-    "debug.showDeveloperTools":  [
-        {
-            "key": "F12"
-        },
-        {
-            "key": "Cmd-Opt-I",
-            "platform": "mac"
-        }
-    ],
-    "debug.refreshWindow":  [
-        {
-            "key": "F5"
-        },
-        {
-            "key": "Cmd-R",
-            "platform": "mac"
-        }
+    "navigate.newRule":  [
+        "Ctrl-Alt-N"
     ],
     "file.rename":  [
         "F2"
+    ],
+    "help.support": [
+        "F1"
     ]
 }

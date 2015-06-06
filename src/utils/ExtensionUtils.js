@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50 */
-/*global define, $, brackets, less */
+/*global define, $, brackets, less, PathUtils */
 
 /**
  * ExtensionUtils defines utility methods for implementing extensions.
@@ -31,6 +31,9 @@
 define(function (require, exports, module) {
     "use strict";
     
+    var FileSystem = require("filesystem/FileSystem"),
+        FileUtils  = require("file/FileUtils");
+
     /**
      * Appends a <style> tag to the document's head.
      *
@@ -58,12 +61,24 @@ define(function (require, exports, module) {
         var $link = $("<link/>").attr(attributes);
         
         if (deferred) {
-            $link.load(deferred.resolve).error(deferred.reject);
+            $link.on('load', deferred.resolve).on('error', deferred.reject);
         }
         
         $link.appendTo("head");
         
         return $link[0];
+    }
+
+    /**
+     * getModuleUrl returns different urls for win platform
+     * so that's why we need a different check here
+     * @see #getModuleUrl
+     * @param {!string} pathOrUrl that should be checked if it's absolute
+     * @return {!boolean} returns true if pathOrUrl is absolute url on win platform
+     *                    or when it's absolute path on other platforms
+     */
+    function isAbsolutePathOrUrl(pathOrUrl) {
+        return brackets.platform === "win" ? PathUtils.isAbsoluteUrl(pathOrUrl) : FileSystem.isAbsolutePath(pathOrUrl);
     }
 
     /**
@@ -75,7 +90,7 @@ define(function (require, exports, module) {
      *
      * @param {!string} code LESS code to parse
      * @param {?string} url URL to the file containing the code
-     * @return {!$.Promise} A promise object that is resolved with CSS code if the LESS code can be parsed.
+     * @return {!$.Promise} A promise object that is resolved with CSS code if the LESS code can be parsed
      */
     function parseLessCode(code, url) {
         var result = new $.Deferred(),
@@ -87,8 +102,19 @@ define(function (require, exports, module) {
             
             options = {
                 filename: file,
-                paths:    [dir]
+                paths:    [dir],
+                rootpath: dir
             };
+
+            if (isAbsolutePathOrUrl(url)) {
+                options.currentFileInfo = {
+                    currentDirectory: dir,
+                    entryPath: dir,
+                    filename: url,
+                    rootFilename: url,
+                    rootpath: dir
+                };
+            }
         }
         
         var parser = new less.Parser(options);
@@ -96,7 +122,11 @@ define(function (require, exports, module) {
             if (err) {
                 result.reject(err);
             } else {
-                result.resolve(tree.toCSS());
+                try {
+                    result.resolve(tree.toCSS());
+                } catch (toCSSError) {
+                    result.reject(toCSSError);
+                }
             }
         });
         
@@ -150,7 +180,7 @@ define(function (require, exports, module) {
      * @return {!$.Promise} A promise object that is resolved with the contents of the requested file
      **/
     function loadFile(module, path) {
-        var url     = getModuleUrl(module, path),
+        var url     = PathUtils.isAbsoluteUrl(path) ? path : getModuleUrl(module, path),
             promise = $.get(url);
 
         return promise;
@@ -189,6 +219,41 @@ define(function (require, exports, module) {
             })
             .fail(result.reject);
         
+        // Summarize error info to console for easier debugging
+        result.fail(function (error, textStatus, httpError) {
+            if (error.readyState !== undefined) {
+                // If first arg is a jQXHR object, the real error info is in the next two args
+                console.error("[Extension] Unable to read stylesheet " + path + ":", textStatus, httpError);
+            } else {
+                console.error("[Extension] Unable to process stylesheet " + path, error);
+            }
+        });
+        
+        return result.promise();
+    }
+    
+    /**
+     * Loads the package.json file in the given extension folder.
+     *
+     * @param {string} folder The extension folder.
+     * @return {$.Promise} A promise object that is resolved with the parsed contents of the package.json file,
+     *     or rejected if there is no package.json or the contents are not valid JSON.
+     */
+    function loadPackageJson(folder) {
+        var file = FileSystem.getFileForPath(folder + "/package.json"),
+            result = new $.Deferred();
+        FileUtils.readAsText(file)
+            .done(function (text) {
+                try {
+                    var json = JSON.parse(text);
+                    result.resolve(json);
+                } catch (e) {
+                    result.reject();
+                }
+            })
+            .fail(function () {
+                result.reject();
+            });
         return result.promise();
     }
     
@@ -199,4 +264,5 @@ define(function (require, exports, module) {
     exports.getModuleUrl          = getModuleUrl;
     exports.loadFile              = loadFile;
     exports.loadStyleSheet        = loadStyleSheet;
+    exports.loadPackageJson       = loadPackageJson;
 });

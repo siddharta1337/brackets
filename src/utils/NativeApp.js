@@ -22,12 +22,13 @@
  */
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, maxerr: 50*/
-/*global $, define, brackets, FileError */
+/*global $, define, brackets */
 
 define(function (require, exports, module) {
     "use strict";
     
-    var Async = require("utils/Async");
+    var Async           = require("utils/Async"),
+        FileSystemError = require("filesystem/FileSystemError");
 
     /**
      * @private
@@ -35,26 +36,30 @@ define(function (require, exports, module) {
      */
     function _browserErrToFileError(err) {
         if (err === brackets.fs.ERR_NOT_FOUND) {
-            return FileError.NOT_FOUND_ERR;
+            return FileSystemError.NOT_FOUND;
         }
         
-        // All other errors are mapped to the generic "security" error
-        return FileError.SECURITY_ERR;
+        // All other errors are mapped to the generic "unknown" error
+        return FileSystemError.UNKNOWN;
     }
     
     var liveBrowserOpenedPIDs = [];
 
     /** openLiveBrowser
-     *
-     * @param {string} url
+     * Open the given URL in the user's system browser, optionally enabling debugging.
+     * @param {string} url The URL to open.
+     * @param {boolean=} enableRemoteDebugging Whether to turn on remote debugging. Default false.
      * @return {$.Promise} 
      */
     function openLiveBrowser(url, enableRemoteDebugging) {
         var result = new $.Deferred();
         
-        brackets.app.openLiveBrowser(url, enableRemoteDebugging, function onRun(err, pid) {
+        brackets.app.openLiveBrowser(url, !!enableRemoteDebugging, function onRun(err, pid) {
             if (!err) {
-                liveBrowserOpenedPIDs.push(pid);
+                // Undefined ids never get removed from list, so don't push them on
+                if (pid !== undefined) {
+                    liveBrowserOpenedPIDs.push(pid);
+                }
                 result.resolve(pid);
             } else {
                 result.reject(_browserErrToFileError(err));
@@ -104,7 +109,7 @@ define(function (require, exports, module) {
      * Opens a URL in the system default browser
      */
     function openURLInDefaultBrowser(url) {
-        brackets.app.openURLInDefaultBrowser(function (err) {}, url);
+        brackets.app.openURLInDefaultBrowser(url);
     }
     
 

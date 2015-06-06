@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $ */
+/*global define */
 
 /**
  * HighlightAgent dispatches events for highlight requests from in-browser
@@ -35,11 +35,13 @@ define(function HighlightAgent(require, exports, module) {
     "use strict";
 
     var DOMAgent        = require("LiveDevelopment/Agents/DOMAgent"),
+        EventDispatcher = require("utils/EventDispatcher"),
         Inspector       = require("LiveDevelopment/Inspector/Inspector"),
         LiveDevelopment = require("LiveDevelopment/LiveDevelopment"),
-        RemoteAgent     = require("LiveDevelopment/Agents/RemoteAgent");
+        RemoteAgent     = require("LiveDevelopment/Agents/RemoteAgent"),
+        _               = require("thirdparty/lodash");
 
-    var _highlight; // active highlight
+    var _highlight = {}; // active highlight
 
     // Remote Event: Highlight
     function _onRemoteHighlight(event, res) {
@@ -47,7 +49,7 @@ define(function HighlightAgent(require, exports, module) {
         if (res.value === "1") {
             node = DOMAgent.nodeWithId(res.nodeId);
         }
-        $(exports).triggerHandler("highlight", [node]);
+        exports.trigger("highlight", node);
     }
 
     /** Hide in-browser highlighting */
@@ -107,6 +109,25 @@ define(function HighlightAgent(require, exports, module) {
         RemoteAgent.call("highlightRule", name);
     }
     
+    /** Highlight all nodes with 'data-brackets-id' value
+     * that matches id, or if id is an array, matches any of the given ids.
+     * @param {string|Array<string>} value of the 'data-brackets-id' to match,
+     * or an array of such.
+     */
+    function domElement(ids) {
+        var selector = "";
+        if (!Array.isArray(ids)) {
+            ids = [ids];
+        }
+        _.each(ids, function (id) {
+            if (selector !== "") {
+                selector += ",";
+            }
+            selector += "[data-brackets-id='" + id + "']";
+        });
+        rule(selector);
+    }
+    
     /**
      * Redraw active highlights
      */
@@ -116,23 +137,26 @@ define(function HighlightAgent(require, exports, module) {
 
     /** Initialize the agent */
     function load() {
-        _highlight = {};
         if (LiveDevelopment.config.experimental) {
-            $(RemoteAgent).on("highlight.HighlightAgent", _onRemoteHighlight);
+            RemoteAgent.on("highlight.HighlightAgent", _onRemoteHighlight);
         }
     }
 
     /** Clean up */
     function unload() {
         if (LiveDevelopment.config.experimental) {
-            $(RemoteAgent).off(".HighlightAgent");
+            RemoteAgent.off(".HighlightAgent");
         }
     }
+    
+    
+    EventDispatcher.makeEventDispatcher(exports);
 
     // Export public functions
     exports.hide = hide;
     exports.node = node;
     exports.rule = rule;
+    exports.domElement = domElement;
     exports.redraw = redraw;
     exports.load = load;
     exports.unload = unload;

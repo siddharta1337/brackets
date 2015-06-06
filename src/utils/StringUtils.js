@@ -22,7 +22,7 @@
  */
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, regexp: true, indent: 4, maxerr: 50 */
-/*global define, $, brackets */
+/*global define, brackets */
 
 /**
  *  Utilities functions related to string manipulation
@@ -30,6 +30,8 @@
  */
 define(function (require, exports, module) {
     "use strict";
+    
+    var _ = require("thirdparty/lodash");
 
     /**
      * Format a string by replacing placeholder symbols with passed in arguments.
@@ -47,15 +49,6 @@ define(function (require, exports, module) {
         return str.replace(/\{(\d+)\}/g, function (match, num) {
             return typeof args[num] !== "undefined" ? args[num] : match;
         });
-    }
-
-    function htmlEscape(str) {
-        return String(str)
-            .replace(/&/g, "&amp;")
-            .replace(/"/g, "&quot;")
-            .replace(/'/g, "&#39;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
     }
 
     function regexEscape(str) {
@@ -152,26 +145,81 @@ define(function (require, exports, module) {
     }
     
     /**
-     * Return a path or URL string that can be broken near path separators.
+     * Return an escaped path or URL string that can be broken near path separators.
      * @param {string} url the path or URL to format
      * @return {string} the formatted path or URL
      */
     function breakableUrl(url) {
+        // This is for displaying in UI, so always want it escaped
+        var escUrl = _.escape(url);
+
         // Inject zero-width space character (U+200B) near path separators (/) to allow line breaking there
-        return url.replace(
+        return escUrl.replace(
             new RegExp(regexEscape("/"), "g"),
             "/" + "&#8203;"
         );
     }
+    
+    /**
+     * Converts number of bytes into human readable format.
+     * If param bytes is negative it returns the number without any changes.
+     *
+     * @param {number} bytes     Number of bytes to convert
+     * @param {number} precision Number of digits after the decimal separator
+     * @return {string}
+     */
+    function prettyPrintBytes(bytes, precision) {
+        var kilobyte = 1024,
+            megabyte = kilobyte * 1024,
+            gigabyte = megabyte * 1024,
+            terabyte = gigabyte * 1024,
+            returnVal = bytes;
+        
+        if ((bytes >= 0) && (bytes < kilobyte)) {
+            returnVal = bytes + " B";
+        } else if (bytes < megabyte) {
+            returnVal = (bytes / kilobyte).toFixed(precision) + " KB";
+        } else if (bytes < gigabyte) {
+            returnVal = (bytes / megabyte).toFixed(precision) + " MB";
+        } else if (bytes < terabyte) {
+            returnVal = (bytes / gigabyte).toFixed(precision) + " GB";
+        } else if (bytes >= terabyte) {
+            return (bytes / terabyte).toFixed(precision) + " TB";
+        }
+        
+        return returnVal;
+    }
+    
+    /**
+     * Truncate text to specified length.
+     * @param {string} str Text to be truncated.
+     * @param {number} len Length to which text should be truncated
+     * @return {?string} Returns truncated text only if it was changed
+     */
+    function truncate(str, len) {
+        // Truncate text to specified length
+        if (str.length > len) {
+            str = str.substr(0, len);
+
+            // To prevent awkwardly truncating in the middle of a word,
+            // attempt to truncate at the end of the last whole word
+            var lastSpaceChar = str.lastIndexOf(" ");
+            if (lastSpaceChar < len && lastSpaceChar > -1) {
+                str = str.substr(0, lastSpaceChar);
+            }
+            return str;
+        }
+    }
 
     // Define public API
-    exports.format          = format;
-    exports.htmlEscape      = htmlEscape;
-    exports.regexEscape     = regexEscape;
-    exports.jQueryIdEscape  = jQueryIdEscape;
-    exports.getLines        = getLines;
-    exports.offsetToLineNum = offsetToLineNum;
-    exports.urlSort         = urlSort;
-    exports.breakableUrl    = breakableUrl;
-    exports.endsWith        = endsWith;
+    exports.format              = format;
+    exports.regexEscape         = regexEscape;
+    exports.jQueryIdEscape      = jQueryIdEscape;
+    exports.getLines            = getLines;
+    exports.offsetToLineNum     = offsetToLineNum;
+    exports.urlSort             = urlSort;
+    exports.breakableUrl        = breakableUrl;
+    exports.endsWith            = endsWith;
+    exports.prettyPrintBytes    = prettyPrintBytes;
+    exports.truncate            = truncate;
 });

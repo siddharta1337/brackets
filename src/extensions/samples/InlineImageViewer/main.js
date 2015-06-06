@@ -43,24 +43,24 @@ define(function (require, exports, module) {
      * @return {String} token string at the specified position
      */
     function _getStringAtPos(hostEditor, pos) {
-        var token = hostEditor._codeMirror.getTokenAt(pos);
+        var token = hostEditor._codeMirror.getTokenAt(pos, true);
         
         // If the pos is at the beginning of a name, token will be the 
         // preceding whitespace or dot. In that case, try the next pos.
-        if (token.string.trim().length === 0 || token.string === ".") {
-            token = hostEditor._codeMirror.getTokenAt({line: pos.line, ch: pos.ch + 1});
+        if (!/\S/.match(token.string) || token.string === ".") {
+            token = hostEditor._codeMirror.getTokenAt({line: pos.line, ch: pos.ch + 1}, true);
         }
         
-        if (token.className === "string") {
+        if (token.type === "string") {
             var string = token.string;
             
             // Strip quotes
-            var char = string[0];
-            if (char === "\"" || char === "'") {
+            var ch = string[0];
+            if (ch === "\"" || ch === "'") {
                 string = string.substr(1);
             }
-            char = string[string.length - 1];
-            if (char === "\"" || char === "'") {
+            ch = string[string.length - 1];
+            if (ch === "\"" || ch === "'") {
                 string = string.substr(0, string.length - 1);
             }
             
@@ -110,7 +110,7 @@ define(function (require, exports, module) {
         }
         
         // Check for valid file extensions
-        if (!/(.png|.jpg|.jpeg|.gif|.svg)$/i.test(fileName)) {
+        if (!/(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.svg)$/i.test(fileName)) {
             return null;
         }
 

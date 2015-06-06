@@ -23,7 +23,7 @@
 
 
 /*jslint vars: true, plusplus: true, devel: true, nomen: true, indent: 4, forin: true, maxerr: 50, regexp: true */
-/*global define, $ */
+/*global define */
 
 /**
  * NetworkAgent tracks all resources loaded by the remote debugger. Use
@@ -34,7 +34,7 @@ define(function NetworkAgent(require, exports, module) {
 
     var Inspector = require("LiveDevelopment/Inspector/Inspector");
 
-    var _urlRequested; // url -> request info
+    var _urlRequested = {}; // url -> request info
 
     /** Return the URL without the query string
      * @param {string} URL
@@ -54,27 +54,54 @@ define(function NetworkAgent(require, exports, module) {
         return _urlRequested && _urlRequested[url];
     }
 
+    function _logURL(url) {
+        _urlRequested[_urlWithoutQueryString(url)] = true;
+    }
+
     // WebInspector Event: Network.requestWillBeSent
     function _onRequestWillBeSent(event, res) {
         // res = {requestId, frameId, loaderId, documentURL, request, timestamp, initiator, stackTrace, redirectResponse}
-        var url = _urlWithoutQueryString(res.request.url);
-        _urlRequested[url] = true;
+        _logURL(res.request.url);
+    }
+
+    function _reset() {
+        _urlRequested = {};
+    }
+
+    // WebInspector Event: Page.frameNavigated
+    function _onFrameNavigated(event, res) {
+        // res = {frame}
+        // Clear log when navigating to a new page, but not if an iframe was loaded
+        if (!res.frame.parentId) {
+            _reset();
+        }
+        _logURL(res.frame.url);
+    }
+    
+    /**
+     * Enable the inspector Network domain
+     * @return {jQuery.Promise} A promise resolved when the Network.enable() command is successful.
+     */
+    function enable() {
+        return Inspector.Network.enable();
     }
 
     /** Initialize the agent */
     function load() {
-        _urlRequested = {};
-        Inspector.Network.enable();
-        $(Inspector.Network).on("requestWillBeSent.NetworkAgent", _onRequestWillBeSent);
+        Inspector.Page.on("frameNavigated.NetworkAgent", _onFrameNavigated);
+        Inspector.Network.on("requestWillBeSent.NetworkAgent", _onRequestWillBeSent);
     }
 
     /** Unload the agent */
     function unload() {
-        $(Inspector.Network).off(".NetworkAgent");
+        _reset();
+        Inspector.Page.off(".NetworkAgent");
+        Inspector.Network.off(".NetworkAgent");
     }
 
     // Export public functions
     exports.wasURLRequested = wasURLRequested;
+    exports.enable = enable;
     exports.load = load;
     exports.unload = unload;
 });
